@@ -9,18 +9,21 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import jakarta.validation.Payload;
-
 /**
  * Vérifie le calcul du {@link PasDeValidator} indépendamment de Spring.
  */
 class PasDeValidatorTest {
 
+	/** Porte l'annotation à tester : lue par réflexion plutôt qu'implémentée à la main. */
+	@PasDe("0.5")
+	private BigDecimal dureeParPasDeDemiHeure;
+
 	private final PasDeValidator validator = new PasDeValidator();
 
 	@BeforeEach
-	void setUp() {
-		validator.initialize(pas("0.5"));
+	void setUp() throws NoSuchFieldException {
+		PasDe pas = PasDeValidatorTest.class.getDeclaredField("dureeParPasDeDemiHeure").getAnnotation(PasDe.class);
+		validator.initialize(pas);
 	}
 
 	@ParameterizedTest
@@ -38,38 +41,6 @@ class PasDeValidatorTest {
 	@Test
 	void accepteNull() {
 		assertThat(validator.isValid(null, null)).isTrue();
-	}
-
-	private static PasDe pas(String valeur) {
-		return new PasDe() {
-
-			@Override
-			public String value() {
-				return valeur;
-			}
-
-			@Override
-			public String message() {
-				return "";
-			}
-
-			@Override
-			public Class<?>[] groups() {
-				return new Class<?>[0];
-			}
-
-			@SuppressWarnings("unchecked")
-			@Override
-			public Class<? extends Payload>[] payload() {
-				return new Class[0];
-			}
-
-			@Override
-			public Class<PasDe> annotationType() {
-				return PasDe.class;
-			}
-
-		};
 	}
 
 }
