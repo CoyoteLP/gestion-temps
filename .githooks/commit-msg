@@ -1,0 +1,57 @@
+#!/bin/sh
+# Contrôles du message de commit :
+#   1. pas de commit direct sur main ni develop, sauf le premier commit du dépôt et, sur develop,
+#      les changements de version « chore(release): ... » ;
+#   2. première ligne au format Conventional Commits : type(portée optionnelle): description
+#      Exemples : "feat(saisie): rendre la date facultative", "fix: corriger le total journalier"
+# Activation (une fois par poste) : git config core.hooksPath .githooks
+
+fichier_message="$1"
+premiere_ligne=$(head -n 1 "$fichier_message")
+
+# Messages générés par Git : fusion, annulation, corrections à réordonner
+case "$premiere_ligne" in
+	"Merge "* | "Revert "* | "fixup! "* | "squash! "* | "amend! "*) exit 0 ;;
+esac
+
+types="feat|fix|test|docs|refactor|perf|style|chore|build|ci|revert"
+motif="^($types)(\([a-z0-9-]+\))?!?: .+"
+
+if ! printf '%s\n' "$premiere_ligne" | grep -Eq "$motif"; then
+	cat >&2 <<EOF
+Message de commit refusé : « $premiere_ligne »
+
+Format attendu : type(portée): description
+  types   : feat, fix, test, docs, refactor, perf, style, chore, build, ci, revert
+  portée  : facultative, en minuscules (ex. saisie, projet, tache, utilisateur)
+Exemples :
+  feat(saisie): rendre la date facultative à la création
+  fix(tache): refuser la modification vers un projet inconnu
+EOF
+	exit 1
+fi
+
+longueur=$(printf '%s' "$premiere_ligne" | wc -m)
+if [ "$longueur" -gt 100 ]; then
+	echo "Message de commit refusé : la première ligne fait $longueur caractères (100 au maximum)." >&2
+	exit 1
+fi
+
+# Branches protégées. Premier commit du dépôt : autorisé (initialisation sur main).
+git rev-parse --verify HEAD >/dev/null 2>&1 || exit 0
+branche=$(git symbolic-ref --short HEAD 2>/dev/null)
+case "$branche" in
+	develop)
+		case "$premiere_ligne" in
+			"chore(release): "*) exit 0 ;;
+		esac ;;
+	main) ;;
+	*) exit 0 ;;
+esac
+cat >&2 <<EOF
+Commit direct sur « $branche » refusé.
+Créer une branche depuis develop (feature/..., bugfix/...) ou main (hotfix/...) :
+  git switch -c feature/ma-fonctionnalite develop
+Seul un changement de version est admis sur develop : « chore(release): version X.Y.Z ».
+EOF
+exit 1

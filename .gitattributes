@@ -1,0 +1,16 @@
+# Tous les fichiers texte sont versionnés et extraits en UTF-8 avec fins de ligne LF uniquement,
+# quel que soit le système (voir aussi .editorconfig).
+* text=auto eol=lf
+
+# Scripts : LF également (mvnw.cmd fonctionne en LF, il ne contient pas d'étiquette goto)
+/mvnw text eol=lf
+*.sh  text eol=lf
+*.cmd text eol=lf
+
+# Fichiers binaires : jamais de conversion
+*.jar  binary
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary

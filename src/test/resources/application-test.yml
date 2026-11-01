@@ -1,0 +1,9 @@
+# Profil de test : base H2 en mémoire, indépendante de MariaDB
+spring:
+  datasource:
+    url: jdbc:h2:mem:gestiontemps-test;MODE=MariaDB;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop

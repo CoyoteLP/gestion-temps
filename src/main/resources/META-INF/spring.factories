@@ -1,0 +1,5 @@
+org.springframework.boot.EnvironmentPostProcessor=\
+com.lirox.gestiontemps.config.VerificationConfigurationBaseDonnees
+
+org.springframework.boot.diagnostics.FailureAnalyzer=\
+com.lirox.gestiontemps.config.ConfigurationBaseDonneesManquanteFailureAnalyzer

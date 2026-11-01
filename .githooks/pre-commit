@@ -1,0 +1,29 @@
+#!/bin/sh
+# Contrôles du contenu avant commit :
+#   1. pas de fichier .env (informations de connexion) ;
+#   2. pas de mot de passe ou secret écrit en clair dans les lignes ajoutées.
+# (L'interdiction des commits directs sur main/develop est dans commit-msg, qui connaît le message.)
+# Activation (une fois par poste) : git config core.hooksPath .githooks
+
+# Fichiers .env (sauf le modèle .env.example)
+fichiers_env=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '(^|/)\.env(\..+)?$' | grep -v '\.env\.example$')
+if [ -n "$fichiers_env" ]; then
+	echo "Commit refusé : fichier d'informations de connexion indexé :" >&2
+	echo "$fichiers_env" | sed 's/^/  /' >&2
+	echo "Le retirer de l'index : git restore --staged <fichier>" >&2
+	exit 1
+fi
+
+# Secrets en clair : mot-clé (password, secret, token...) suivi de « : » ou « = » et d'une valeur.
+# Ignorés : lignes contenant un placeholder ${...} (Spring, shell), le modèle .env.example et ce dossier.
+secrets=$(git diff --cached -U0 --diff-filter=ACMR -- . ':(exclude).env.example' ':(exclude).githooks' \
+	| grep -E '^\+[^+]' \
+	| grep -vF '${' \
+	| grep -iE '(password|passwd|pwd|secret|token|api[_-]?key)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[^[:space:]"'"'"'$]{4,}')
+if [ -n "$secrets" ]; then
+	echo "Commit refusé : secret possiblement écrit en clair :" >&2
+	echo "$secrets" | sed 's/^/  /' >&2
+	echo "Utiliser une variable d'environnement (\${DB_PASSWORD}) et le fichier .env." >&2
+	echo "Faux positif avéré : git commit --no-verify (à justifier en revue)." >&2
+	exit 1
+fi
