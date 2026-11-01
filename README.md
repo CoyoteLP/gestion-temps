@@ -46,8 +46,9 @@ Après le clonage, activer les hooks Git du projet (une seule fois par poste) :
 git config core.hooksPath .githooks
 ```
 
-- Branches selon Git Flow : `main` (production), `develop` (intégration), puis `feature/*`,
-  `bugfix/*`, `release/*`, `hotfix/*` ; jamais de commit direct sur `main` ni `develop`.
+- Branches selon Git Flow : `main` (production), `develop` (intégration, branche par défaut),
+  puis `feature/*`, `bugfix/*`, `chore/*`, `release/*`, `hotfix/*`. Toute modification de `main`
+  ou `develop` passe par une pull request (protégées sur GitHub).
 - Messages de commit au format Conventional Commits, en français :
   `feat(saisie): rendre la date facultative`.
 - Fichiers en UTF-8 avec fins de ligne LF (voir `.editorconfig`).
