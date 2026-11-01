@@ -1,4 +1,5 @@
-# Intégration continue : compile et lance tous les tests (base H2 en mémoire, sans MariaDB ni .env).
+# Intégration continue : compile, lance tous les tests (MariaDB via Testcontainers, Docker fourni
+# par le runner, sans .env) et vérifie la couverture de tests (JaCoCo).
 # À rendre obligatoire avant fusion dans main et develop (protection de branches GitHub).
 name: CI
 

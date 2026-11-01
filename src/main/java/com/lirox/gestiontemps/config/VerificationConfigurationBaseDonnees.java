@@ -19,8 +19,8 @@ import org.springframework.util.StringUtils;
  * arrête l'application avec un message explicite sinon.
  * <p>
  * S'exécute après le chargement de la configuration (y compris l'import du {@code .env}) ; ignoré
- * pour les autres profils, notamment {@code test} qui utilise une base H2 en mémoire. Enregistré dans
- * {@code META-INF/spring.factories}.
+ * pour les autres profils, notamment {@code test} qui utilise une base MariaDB Testcontainers.
+ * Enregistré dans {@code META-INF/spring.factories}.
  */
 public class VerificationConfigurationBaseDonnees implements EnvironmentPostProcessor, Ordered {
 

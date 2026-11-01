@@ -7,7 +7,7 @@ vont dans `CLAUDE.local.md` (non versionné).
 ## Commandes
 
 ```bash
-./mvnw test                                         # tous les tests (H2 en mémoire, sans MariaDB)
+./mvnw test                                         # tous les tests (MariaDB via Testcontainers : Docker lancé)
 ./mvnw test -Dtest=SaisieTempsControllerTest        # une classe de test
 ./mvnw spring-boot:run                              # profil dev (MariaDB locale)
 ```
@@ -171,6 +171,13 @@ Messages d'erreur en français, compréhensibles par un utilisateur final.
 - Vérifier le corps sous `$.data` (succès) ou `$.message` (erreur).
 - Chaque nouvelle règle métier s'accompagne d'un test du cas accepté **et** du cas refusé.
 - Ne pas comparer les messages de Bean Validation mot pour mot : ils dépendent de la langue de la JVM.
+- Les tests tournent sur MariaDB (même moteur qu'en production), dans un conteneur Testcontainers
+  partagé par toute la suite (`application-test.yml`) : Docker doit être lancé.
+- Une règle qui dépend de transactions réellement validées (accès concurrents, verrous) se teste
+  dans une classe **sans** `@Transactional`, qui vide la base dans un `@AfterEach`
+  (voir `SaisieTempsServiceTest`).
+- `./mvnw verify` impose une couverture minimale des lignes du paquet `service`
+  (`couverture.service.minimum` dans `pom.xml`) ; rapport dans `target/site/jacoco/index.html`.
 
 ## Base de données
 
