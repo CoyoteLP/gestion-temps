@@ -1,7 +1,7 @@
 #!/bin/sh
 # Contrôles du message de commit :
-#   1. pas de commit direct sur main ni develop, sauf le premier commit du dépôt et, sur develop,
-#      les changements de version « chore(release): ... » ;
+#   1. pas de commit direct sur main ni develop, sauf le premier commit du dépôt (toute
+#      modification passe par une branche et une pull request, comme l'impose GitHub) ;
 #   2. première ligne au format Conventional Commits : type(portée optionnelle): description
 #      Exemples : "feat(saisie): rendre la date facultative", "fix: corriger le total journalier"
 # Activation (une fois par poste) : git config core.hooksPath .githooks
@@ -41,17 +41,12 @@ fi
 git rev-parse --verify HEAD >/dev/null 2>&1 || exit 0
 branche=$(git symbolic-ref --short HEAD 2>/dev/null)
 case "$branche" in
-	develop)
-		case "$premiere_ligne" in
-			"chore(release): "*) exit 0 ;;
-		esac ;;
-	main) ;;
+	main | develop) ;;
 	*) exit 0 ;;
 esac
 cat >&2 <<EOF
 Commit direct sur « $branche » refusé.
-Créer une branche depuis develop (feature/..., bugfix/...) ou main (hotfix/...) :
+Créer une branche depuis develop (feature/..., bugfix/..., chore/...) ou main (hotfix/...) :
   git switch -c feature/ma-fonctionnalite develop
-Seul un changement de version est admis sur develop : « chore(release): version X.Y.Z ».
 EOF
 exit 1

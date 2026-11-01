@@ -194,17 +194,23 @@ Messages d'erreur en français, compréhensibles par un utilisateur final.
 | `develop`   | `main`       | —                       | intégration de la prochaine version          |
 | `feature/*` | `develop`    | `develop`               | une fonctionnalité                           |
 | `bugfix/*`  | `develop`    | `develop`               | correction avant mise en production          |
+| `chore/*`   | `develop`    | `develop`               | maintenance : version, dépendances, configuration |
 | `release/*` | `develop`    | `main` **et** `develop` | préparation d'une version (pas de nouveauté) |
 | `hotfix/*`  | `main`       | `main` **et** `develop` | correctif urgent en production               |
 
 - Nommage : `type/numero-description-courte` en minuscules et tirets
-  (`feature/12-saisie-sans-date`, `release/0.2.0`, `hotfix/0.1.1-total-journalier`).
-- Jamais de commit direct sur `main` ni `develop` (bloqué par le hook `commit-msg`), sauf le
-  changement de version sur `develop` après une release : `chore(release): version X.Y.Z`.
-- `feature/*` et `bugfix/*` → `develop` : pull request fusionnée en **squash**, après `/review`.
-- `release/*` et `hotfix/*` → `main` : fusion `--no-ff` puis tag `vX.Y.Z` ; reporter ensuite la
-  même branche dans `develop`.
-- Les branches de travail sont supprimées après fusion.
+  (`feature/12-saisie-sans-date`, `chore/version-0.2.0`, `release/1.0.0`, `hotfix/1.0.1-total-journalier`).
+- **Toute** modification de `main` ou `develop` passe par une pull request : GitHub l'impose à
+  tous, administrateurs compris (CI « Build et tests » verte et branche à jour), et le hook
+  `commit-msg` refuse localement les commits directs sur ces branches.
+- `feature/*`, `bugfix/*`, `chore/*` → `develop` : pull request fusionnée en **squash**, après
+  `/review`. Le titre de la pull request devient le message du commit : il suit donc le format
+  Conventional Commits.
+- `release/*` et `hotfix/*` → `main` : pull request fusionnée en **merge commit** (équivalent
+  `--no-ff`), puis tag `vX.Y.Z` sur `main` ; reporter ensuite la même branche dans `develop` par
+  une pull request en merge commit (pas de squash, pour garder l'historique commun).
+- Les branches de travail sont supprimées automatiquement après fusion.
+- Branche par défaut sur GitHub : `develop` (cible par défaut des pull requests).
 
 ### Messages de commit
 
@@ -223,12 +229,13 @@ Changement incompatible de l'API : `!` après le type (`feat(api)!: …`).
 
 - Versionnement sémantique `MAJEUR.MINEUR.CORRECTIF`, identique dans `pom.xml` et dans le tag Git
   (`v0.1.0`) ; pas de suffixe `-SNAPSHOT`.
+- Changement de version sur `develop` : branche `chore/version-X.Y.Z` qui ne modifie que
+  `pom.xml`, pull request intitulée `chore(release): version X.Y.Z`, fusion en squash.
 - **Avant 1.0.0** (phase actuelle) : pas de release ni de tag. `main` reste sur la version
-  d'initialisation (`0.0.1`) ; `develop` porte la version en cours (`0.1.0`, puis `0.2.0`…), changée
-  par un commit `chore(release): version 0.Y.0` sur `develop`.
+  d'initialisation (`0.0.1`) ; `develop` porte la version en cours (`0.1.0`, puis `0.2.0`…).
 - **À partir de 1.0.0** : chaque version passe par une `release/X.Y.Z` qui la fige, est fusionnée
-  dans `main` avec le tag `vX.Y.Z`, puis `develop` passe à la version mineure suivante ; un
-  `hotfix/*` augmente le correctif (`1.0.0` → `1.0.1`).
+  dans `main` avec le tag `vX.Y.Z`, puis `develop` passe à la version mineure suivante (branche
+  `chore/version-…`) ; un `hotfix/*` augmente le correctif (`1.0.0` → `1.0.1`).
 
 ### Qualité
 
