@@ -13,6 +13,15 @@ spring:
 server:
   port: 8080
 
+gestion-temps:
+  securite:
+    # Chemin de la revendication du jeton qui porte les rôles (ex. realm_access.roles pour Keycloak) ;
+    # seule la valeur ADMIN y est recherchée, tout autre utilisateur authentifié est collaborateur.
+    claim-roles: ${OIDC_ROLES_CLAIM:roles}
+    # Rattachement d'un compte par email : exiger email_verified = true dans le jeton. Ne passer à
+    # false que si le fournisseur ne transmet pas cette revendication et garantit lui-même les emails.
+    exiger-email-verifie: ${OIDC_EXIGER_EMAIL_VERIFIE:true}
+
 management:
   endpoints:
     web:

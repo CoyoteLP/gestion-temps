@@ -1,0 +1,98 @@
+{
+	"realm": "gestion-temps",
+	"displayName": "gestion-temps (développement)",
+	"enabled": true,
+	"accessTokenLifespan": 1800,
+	"roles": {
+		"realm": [
+			{
+				"name": "ADMIN",
+				"description": "Administrateur de l'API gestion-temps"
+			}
+		]
+	},
+	"clients": [
+		{
+			"clientId": "gestion-temps-dev",
+			"name": "gestion-temps (développement)",
+			"description": "Client public de développement : jetons obtenus par identifiant et mot de passe (jeton.sh)",
+			"enabled": true,
+			"publicClient": true,
+			"standardFlowEnabled": false,
+			"directAccessGrantsEnabled": true,
+			"protocolMappers": [
+				{
+					"name": "audience-api",
+					"protocol": "openid-connect",
+					"protocolMapper": "oidc-audience-mapper",
+					"config": {
+						"included.custom.audience": "gestion-temps-api",
+						"access.token.claim": "true",
+						"id.token.claim": "false"
+					}
+				},
+				{
+					"name": "roles",
+					"protocol": "openid-connect",
+					"protocolMapper": "oidc-usermodel-realm-role-mapper",
+					"config": {
+						"claim.name": "roles",
+						"multivalued": "true",
+						"jsonType.label": "String",
+						"access.token.claim": "true",
+						"id.token.claim": "false",
+						"userinfo.token.claim": "false"
+					}
+				}
+			]
+		}
+	],
+	"users": [
+		{
+			"username": "admin",
+			"email": "admin@lirox.test",
+			"emailVerified": true,
+			"firstName": "Alice",
+			"lastName": "Admin",
+			"enabled": true,
+			"realmRoles": ["ADMIN"],
+			"credentials": [
+				{
+					"type": "password",
+					"value": "admin",
+					"temporary": false
+				}
+			]
+		},
+		{
+			"username": "jdupont",
+			"email": "jdupont@lirox.test",
+			"emailVerified": true,
+			"firstName": "Jean",
+			"lastName": "Dupont",
+			"enabled": true,
+			"credentials": [
+				{
+					"type": "password",
+					"value": "jdupont",
+					"temporary": false
+				}
+			]
+		},
+		{
+			"username": "pmartin",
+			"email": "pmartin@lirox.test",
+			"emailVerified": true,
+			"firstName": "Paul",
+			"lastName": "Martin",
+			"enabled": true,
+			"credentials": [
+				{
+					"type": "password",
+					"value": "pmartin",
+					"temporary": false
+				}
+			]
+		}
+	]
+}

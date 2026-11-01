@@ -20,12 +20,14 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.lirox.gestiontemps.JetonsDeTest;
 import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.repository.ProjetRepository;
@@ -34,6 +36,7 @@ import com.lirox.gestiontemps.repository.ProjetRepository;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
+@Import(JetonsDeTest.AdministrateurParDefaut.class)
 class ProjetControllerTest {
 
 	@Autowired

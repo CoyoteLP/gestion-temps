@@ -10,6 +10,7 @@ vont dans `CLAUDE.local.md` (non versionné).
 ./mvnw test                                         # tous les tests (MariaDB via Testcontainers : Docker lancé)
 ./mvnw test -Dtest=SaisieTempsControllerTest        # une classe de test
 ./mvnw spring-boot:run                              # profil dev (MariaDB locale)
+docker compose -f docker/keycloak/compose.yaml up -d  # Keycloak de dev (jetons : docker/keycloak/jeton.sh)
 ```
 
 Lancer `./mvnw test` après toute modification et avant de déclarer une tâche terminée.
@@ -126,9 +127,10 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - Une règle qui dépend de plusieurs lignes (ex. total journalier) se protège des écritures
   simultanées par un verrou pessimiste sur la ligne parente (`@Lock(PESSIMISTIC_WRITE)` avec un
   délai d'attente borné par `@QueryHint` dans le repository, voir
-  `UtilisateurRepository.findVerrouilleById`). Le verrou est posé **en premier**, avant toute autre
-  lecture de la transaction : sous MariaDB (REPEATABLE READ), la première lecture fige la vue de la
-  transaction, et un calcul fait après coup ignorerait les écritures validées pendant l'attente.
+  `UtilisateurRepository.findVerrouilleById`), dans une transaction
+  `@Transactional(isolation = Isolation.READ_COMMITTED)` : sous l'isolation par défaut de MariaDB
+  (REPEATABLE READ), la première lecture fige la vue de la transaction, et un calcul fait après
+  l'attente du verrou ignorerait les écritures validées entre-temps (voir `SaisieTempsService`).
 - Date du jour : `LocalDate.now(clock)` avec le bean `Clock`, dans le fuseau
   `Constantes.FUSEAU_HORAIRE` ; jamais `LocalDate.now()` sans argument.
 
@@ -137,6 +139,20 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
   `@Validated({ Default.class, Modification.class }) @RequestBody` sur les `PUT`.
 - `POST` → 201 + en-tête `Location` ; `DELETE` → 200 avec `data: null` et un message de confirmation.
 - Les filtres de liste sont des `@RequestParam(required = false)`.
+
+## Sécurité
+
+- Authentification par jeton OIDC (resource server JWT, `SecurityConfig`), sans session : signature,
+  émetteur, **audience** (`OIDC_AUDIENCE`) et expiration vérifiés ; rôle administrateur = valeur
+  `Constantes.ROLE_ADMIN` dans la revendication des rôles.
+- Règles grossières par URL et rôle dans `SecurityConfig` (lecture pour tout authentifié, écritures
+  de référentiel réservées à l'administrateur) ; règles fines (« ses propres saisies », membres d'un
+  projet) dans les **services**, via `UtilisateurCourantService` (`estAdmin()`, `get()`), en levant
+  `AccesRefuseException`. Jamais de contrôle d'accès dans un contrôleur.
+- 401 et 403 de Spring Security passent par `GlobalExceptionHandler` (enveloppe `ApiResponse`).
+- Un utilisateur est identifié par la revendication `sub` (colonne `utilisateur.sujet`), rattachée
+  une fois par l'email du jeton, seulement s'il est déclaré vérifié (`email_verified`, voir
+  `ProprietesSecurite.exigerEmailVerifie`).
 
 ## Format des réponses et gestion des erreurs
 
@@ -159,6 +175,7 @@ Chaque exception porte son code HTTP, que `GlobalExceptionHandler` applique auto
 | `DuplicateResourceException`       | 409  | contrainte d'unicité (code, email…)                     |
 | `ResourceInUseException`           | 409  | suppression d'une ressource encore référencée           |
 | `ModificationConcurrenteException` | 409  | version périmée envoyée en modification                 |
+| `AccesRefuseException`             | 403  | droit insuffisant (saisie d'un autre, compte inconnu…)  |
 | `BusinessRuleException`            | 422  | règle métier enfreinte (24 h/jour, ressource inactive…) |
 | `ApplicationException`             | 500  | erreur technique (utilisée directement)                 |
 | validation Bean Validation         | 400  | gérée automatiquement, champs en cause dans `message`   |
@@ -188,6 +205,10 @@ Messages d'erreur en français, compréhensibles par un utilisateur final.
 
 - Classe de test nommée **classe cible + `Test`**, dans le même paquet que la classe testée
   (ex. `SaisieTempsControllerTest`, `GlobalExceptionHandlerTest`).
+- Authentification : les tests MockMvc importent `JetonsDeTest.AdministrateurParDefaut` (chaque
+  requête est faite en administrateur) et la remplacent au besoin par `.with(collaborateur(u))`,
+  `.with(jwt())` ou `.with(anonymous())`. Toute règle d'accès est testée avec le rôle autorisé
+  **et** un rôle refusé (voir `SecurityConfigTest`, droits dans `SaisieTempsControllerTest`).
 - Contrôleurs : tests d'intégration
   `@SpringBootTest @AutoConfigureMockMvc @ActiveProfiles("test") @Transactional`.
 - Noms de méthodes en français décrivant le comportement (`deleteProjetRefuseSiTachesExistantes`).

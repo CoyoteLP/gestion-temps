@@ -7,7 +7,7 @@ API REST de gestion du temps de travail (Spring Boot 4, Java 21).
 Les informations de connexion à la base ne sont pas versionnées. Avant le premier lancement :
 
 ```bash
-cp .env.example .env            # puis renseigner DB_URL, DB_USERNAME, DB_PASSWORD dans .env
+cp .env.example .env            # puis renseigner DB_*, OIDC_ISSUER_URI et OIDC_AUDIENCE
 ./mvnw spring-boot:run          # profil dev (MariaDB locale)
 ```
 
@@ -44,7 +44,8 @@ Les tests (`./mvnw test`) utilisent une base MariaDB démarrée automatiquement 
 (Testcontainers) : Docker doit être lancé, mais ni MariaDB locale ni `.env` ne sont nécessaires.
 `./mvnw verify` vérifie en plus la couverture de tests (rapport : `target/site/jacoco/index.html`).
 
-En production : `SPRING_PROFILES_ACTIVE=prod` avec `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`.
+En production : `SPRING_PROFILES_ACTIVE=prod` avec `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`,
+`OIDC_ISSUER_URI` et `OIDC_AUDIENCE` (voir « Authentification et droits »).
 
 ## Contribuer
 
@@ -80,10 +81,11 @@ Les ressources `utilisateurs`, `taches` et `saisies-temps` exposent les mêmes o
 |--------------------------|----------------------------------------------|
 | /api/utilisateurs        | –                                            |
 | /api/taches              | `projetId`                                   |
-| /api/saisies-temps       | `utilisateurId`, `tacheId`, `du`, `au` (dates) |
+| /api/saisies-temps       | `utilisateurId`, `projetId`, `tacheId`, `du`, `au` (dates) |
+| /api/projets/{projetId}/membres | –                                     |
 
-Pour saisir des heures : `POST /api/saisies-temps` avec `utilisateurId`, `tacheId` (une tâche du
-projet), `duree` en heures (de 0,5 à 24, par pas de 0,5 : 1, 1.5, 7.5…), et éventuellement `jour`
+Pour saisir des heures : `POST /api/saisies-temps` avec `tacheId` (une tâche du projet),
+éventuellement `utilisateurId` (par défaut l'utilisateur connecté), `duree` en heures (de 0,5 à 24, par pas de 0,5 : 1, 1.5, 7.5…), et éventuellement `jour`
 et `commentaire`. Sans `jour`, la saisie est
 datée d'aujourd'hui ; en modification (`PUT`), un `jour` absent conserve la date existante.
 
@@ -118,6 +120,64 @@ une création ou modification qui le dépasserait renvoie 422. De même, saisir 
 un utilisateur désactivé, sur une tâche désactivée ou sur une tâche d'un projet désactivé
 renvoie 422. Ce contrôle ne s'applique qu'à la création ou au changement d'utilisateur/de
 tâche : une saisie existante reste corrigeable (durée, jour, commentaire) après une désactivation.
+
+## Authentification et droits
+
+Toutes les requêtes (sauf `/actuator/health`) exigent un jeton d'accès OIDC dans l'en-tête
+`Authorization: Bearer <jeton>`, émis par le fournisseur configuré dans `OIDC_ISSUER_URI` (l'API ne
+gère aucun mot de passe) et destiné à l'API : sa revendication `aud` doit contenir `OIDC_AUDIENCE`
+(ex. `gestion-temps-api`), un jeton émis pour une autre application du même fournisseur est refusé.
+Sans jeton valide (signature, émetteur, audience, expiration) : 401.
+
+- **Rôle administrateur** : la revendication des rôles du jeton (`roles` par défaut, configurable
+  par `OIDC_ROLES_CLAIM`, ex. `realm_access.roles` pour Keycloak) contient `ADMIN`. L'administrateur
+  gère les projets, tâches, utilisateurs et membres, et accède à toutes les saisies.
+- **Collaborateur** : tout autre utilisateur authentifié. Il lit les projets, tâches, utilisateurs
+  et membres ; il crée, modifie et supprime **ses** saisies, et consulte en plus celles des projets
+  dont il est membre (filtre `projetId` ou `tacheId`). Toute autre écriture : 403.
+- **Membres d'un projet** (`/api/projets/{projetId}/membres`) : un utilisateur avec un rôle de
+  projet `MANAGER` ou `BACKUP` (mêmes droits aujourd'hui).
+- **Rattachement du compte** : l'administrateur crée l'utilisateur avec son email ; à la première
+  connexion, l'API le retrouve par l'email du jeton puis mémorise l'identifiant du compte (`sub`).
+  L'email doit être déclaré vérifié par le fournisseur (`email_verified: true`) ; pour un
+  fournisseur qui ne transmet pas cette revendication mais garantit les emails (annuaire de
+  l'entreprise), `OIDC_EXIGER_EMAIL_VERIFIE=false` accepte son absence.
+  Un compte sans utilisateur correspondant, ou un utilisateur désactivé, reçoit 403 sur les saisies.
+
+### Keycloak de développement
+
+Un fournisseur OIDC local est fourni pour appeler l'API avec de vrais jetons
+(`docker/keycloak/`, jamais en production) :
+
+```bash
+docker compose -f docker/keycloak/compose.yaml up -d   # Keycloak sur http://localhost:8180 (≈ 30 s)
+```
+
+Dans `.env` : `OIDC_ISSUER_URI=http://localhost:8180/realms/gestion-temps` et
+`OIDC_AUDIENCE=gestion-temps-api` (le royaume place l'audience et les rôles dans le jeton). Comptes de test du royaume
+`gestion-temps`, mot de passe identique à l'identifiant :
+
+| Compte    | Email                | Rôle                                      |
+|-----------|----------------------|-------------------------------------------|
+| `admin`   | `admin@lirox.test`   | `ADMIN`                                   |
+| `jdupont` | `jdupont@lirox.test` | collaborateur                             |
+| `pmartin` | `pmartin@lirox.test` | collaborateur (à ajouter comme membre d'un projet) |
+
+L'administrateur n'a pas besoin d'exister dans l'API ; les collaborateurs doivent y être créés avec
+le même email pour que leur compte soit rattaché :
+
+```bash
+ADMIN=$(./docker/keycloak/jeton.sh admin)
+curl -H "Authorization: Bearer $ADMIN" -H 'Content-Type: application/json' \
+     -d '{"email":"jdupont@lirox.test","nom":"Dupont","prenom":"Jean"}' http://localhost:8080/api/utilisateurs
+JDUPONT=$(./docker/keycloak/jeton.sh jdupont)
+curl -H "Authorization: Bearer $JDUPONT" http://localhost:8080/api/saisies-temps
+```
+
+Les jetons durent 30 minutes. Console d'administration : http://localhost:8180/admin (`admin`,
+mot de passe `KEYCLOAK_ADMIN_PASSWORD`, `admin` par défaut). Sous Git Bash (Windows), éviter les
+accents dans les corps JSON passés en argument à `curl` (ils ne sont pas envoyés en UTF-8) :
+utiliser un fichier (`--data-binary @corps.json`).
 
 ## Format des réponses
 

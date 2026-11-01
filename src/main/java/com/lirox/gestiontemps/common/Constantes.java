@@ -33,6 +33,13 @@ public final class Constantes {
 	 */
 	public static final String DELAI_VERROU_UTILISATEUR_MS = "5000";
 
+	/**
+	 * Valeur de la revendication des rôles du jeton qui donne les droits d'administration (gestion
+	 * des projets, tâches, utilisateurs et membres, accès à toutes les saisies). Sans elle, l'appelant
+	 * est un collaborateur.
+	 */
+	public static final String ROLE_ADMIN = "ADMIN";
+
 	private Constantes() {
 	}
 

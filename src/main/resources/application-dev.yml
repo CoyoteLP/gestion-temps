@@ -11,3 +11,11 @@ spring:
     password: ${DB_PASSWORD}
   jpa:
     show-sql: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Émetteur des jetons (fournisseur OIDC) ; ses clés publiques sont lues à la première requête
+          issuer-uri: ${OIDC_ISSUER_URI}
+          # Destinataire attendu (revendication aud) : refuse les jetons émis pour d'autres applications
+          audiences: ${OIDC_AUDIENCE}

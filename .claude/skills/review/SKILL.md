@@ -112,10 +112,14 @@ jusqu'à son utilisation, et vérifier qu'elle ne peut pas détourner le comport
   `application*.yml` versionnés : variables d'environnement uniquement.
 
 **Contrôle d'accès**
-- L'API n'a pas encore d'authentification : tout appelant peut lire et modifier toutes les
-  données. Ne pas le re-signaler à chaque revue, mais signaler en *Bloquant* toute modification qui
-  suppose un contrôle d'accès inexistant (ex. « un utilisateur ne voit que ses saisies ») ou qui
-  expose un nouvel endpoint d'administration ou de données personnelles.
+- Tout nouvel endpoint est couvert par `SecurityConfig` : écriture de référentiel réservée au rôle
+  administrateur, lecture authentifiée ; *Bloquant* s'il est public ou ouvert à tort.
+- Une règle « ses propres données » ou « membre du projet » est vérifiée dans le service avec
+  `UtilisateurCourantService` et `AccesRefuseException` ; *Bloquant* si elle manque, ou si un
+  identifiant d'utilisateur fourni par le client est cru sans contrôle (ex. `utilisateurId` d'un
+  collaborateur différent du sien).
+- Chaque règle d'accès a un test du rôle autorisé et d'un rôle refusé (403), et un test sans jeton
+  (401) pour un nouvel endpoint.
 
 **Dépendances**
 - Nouvelle dépendance dans `pom.xml` : version explicite ou gérée par le parent Spring Boot, pas de

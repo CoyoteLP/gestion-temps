@@ -12,6 +12,7 @@ import com.lirox.gestiontemps.exception.DuplicateResourceException;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.exception.ResourceInUseException;
 import com.lirox.gestiontemps.exception.ResourceNotFoundException;
+import com.lirox.gestiontemps.repository.MembreProjetRepository;
 import com.lirox.gestiontemps.repository.SaisieTempsRepository;
 import com.lirox.gestiontemps.repository.UtilisateurRepository;
 
@@ -28,6 +29,7 @@ public class UtilisateurService {
 
 	private final UtilisateurRepository utilisateurRepository;
 	private final SaisieTempsRepository saisieTempsRepository;
+	private final MembreProjetRepository membreProjetRepository;
 
 	/**
 	 * @return tous les utilisateurs
@@ -83,7 +85,8 @@ public class UtilisateurService {
 	/**
 	 * @param id identifiant de l'utilisateur à supprimer
 	 * @throws ResourceNotFoundException si l'utilisateur n'existe pas
-	 * @throws ResourceInUseException    si l'utilisateur possède des saisies (le désactiver à la place)
+	 * @throws ResourceInUseException    si l'utilisateur possède des saisies (le désactiver à la place) ;
+	 *                                   il est retiré des projets dont il est membre
 	 */
 	@Transactional
 	public void delete(Long id) {
@@ -91,6 +94,7 @@ public class UtilisateurService {
 		if (saisieTempsRepository.existsByUtilisateurId(id)) {
 			throw new ResourceInUseException("L'utilisateur possède des saisies de temps : désactivez-le plutôt");
 		}
+		membreProjetRepository.deleteByUtilisateurId(id);
 		utilisateurRepository.delete(utilisateur);
 	}
 

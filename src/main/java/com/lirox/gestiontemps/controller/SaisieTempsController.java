@@ -38,9 +38,11 @@ public class SaisieTempsController {
 	private final SaisieTempsService saisieTempsService;
 
 	/**
-	 * {@code GET /api/saisies-temps?utilisateurId=&tacheId=&du=&au=} : recherche de saisies.
+	 * {@code GET /api/saisies-temps?utilisateurId=&projetId=&tacheId=&du=&au=} : recherche de saisies.
+	 * Un collaborateur obtient ses saisies, ou celles d'un projet dont il est membre.
 	 *
 	 * @param utilisateurId filtre optionnel sur l'utilisateur
+	 * @param projetId      filtre optionnel sur le projet
 	 * @param tacheId       filtre optionnel sur la tâche
 	 * @param du            filtre optionnel : à partir de ce jour (inclus, format AAAA-MM-JJ)
 	 * @param au            filtre optionnel : jusqu'à ce jour (inclus, format AAAA-MM-JJ)
@@ -49,10 +51,11 @@ public class SaisieTempsController {
 	@GetMapping
 	public ApiResponse<List<SaisieTempsResponse>> search(
 			@RequestParam(required = false) Long utilisateurId,
+			@RequestParam(required = false) Long projetId,
 			@RequestParam(required = false) Long tacheId,
 			@RequestParam(required = false) LocalDate du,
 			@RequestParam(required = false) LocalDate au) {
-		return ApiResponse.success(saisieTempsService.search(utilisateurId, tacheId, du, au));
+		return ApiResponse.success(saisieTempsService.search(utilisateurId, projetId, tacheId, du, au));
 	}
 
 	/**

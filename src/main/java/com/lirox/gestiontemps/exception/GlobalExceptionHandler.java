@@ -16,6 +16,8 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -92,6 +94,29 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	@ExceptionHandler(ObjectOptimisticLockingFailureException.class)
 	public ResponseEntity<ApiResponse<Void>> handleOptimisticLocking(ObjectOptimisticLockingFailureException ex) {
 		return error(HttpStatus.CONFLICT, ModificationConcurrenteException.MESSAGE);
+	}
+
+	/**
+	 * Requête sans jeton, ou jeton invalide ou expiré (relayée par le point d'entrée de Spring Security).
+	 *
+	 * @param ex échec d'authentification
+	 * @return 401 avec un message destiné à l'utilisateur
+	 */
+	@ExceptionHandler(AuthenticationException.class)
+	public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException ex) {
+		return error(HttpStatus.UNAUTHORIZED, "Authentification requise : jeton absent, invalide ou expiré");
+	}
+
+	/**
+	 * Rôle insuffisant pour l'URL demandée (ex. écriture d'un projet sans le rôle administrateur),
+	 * relayé par Spring Security.
+	 *
+	 * @param ex refus d'accès
+	 * @return 403 avec un message destiné à l'utilisateur
+	 */
+	@ExceptionHandler(AccessDeniedException.class)
+	public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+		return error(HttpStatus.FORBIDDEN, "Accès refusé : cette opération est réservée aux administrateurs");
 	}
 
 	/**

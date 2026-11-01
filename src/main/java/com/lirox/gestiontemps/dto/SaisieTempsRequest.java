@@ -15,7 +15,8 @@ import jakarta.validation.constraints.Size;
 /**
  * Données de création ou de modification d'une saisie de temps.
  *
- * @param utilisateurId utilisateur ayant effectué le travail
+ * @param utilisateurId utilisateur ayant effectué le travail, optionnel : l'appelant par défaut ;
+ *                      seul un administrateur peut saisir pour un autre utilisateur
  * @param tacheId       tâche sur laquelle le temps est imputé
  * @param jour          journée travaillée, optionnelle : date du jour en création, date inchangée en
  *                      modification
@@ -27,7 +28,7 @@ import jakarta.validation.constraints.Size;
  *                      en création ; un écart avec la version en base renvoie 409
  */
 public record SaisieTempsRequest(
-		@NotNull Long utilisateurId,
+		Long utilisateurId,
 		@NotNull Long tacheId,
 		LocalDate jour,
 		@NotNull(message = "est obligatoire")
