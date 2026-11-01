@@ -19,6 +19,7 @@ public interface SaisieTempsRepository extends JpaRepository<SaisieTemps, Long> 
 	 * Recherche avec filtres optionnels (un paramètre null n'est pas filtré), triée par jour.
 	 *
 	 * @param utilisateurId saisies de cet utilisateur
+	 * @param projetId      saisies sur les tâches de ce projet
 	 * @param tacheId       saisies sur cette tâche
 	 * @param du            saisies à partir de ce jour (inclus)
 	 * @param au            saisies jusqu'à ce jour (inclus)
@@ -27,13 +28,14 @@ public interface SaisieTempsRepository extends JpaRepository<SaisieTemps, Long> 
 	@Query("""
 			select s from SaisieTemps s
 			where (:utilisateurId is null or s.utilisateur.id = :utilisateurId)
+			  and (:projetId is null or s.tache.projet.id = :projetId)
 			  and (:tacheId is null or s.tache.id = :tacheId)
 			  and (:du is null or s.jour >= :du)
 			  and (:au is null or s.jour <= :au)
 			order by s.jour, s.id
 			""")
-	List<SaisieTemps> search(@Param("utilisateurId") Long utilisateurId, @Param("tacheId") Long tacheId,
-			@Param("du") LocalDate du, @Param("au") LocalDate au);
+	List<SaisieTemps> search(@Param("utilisateurId") Long utilisateurId, @Param("projetId") Long projetId,
+			@Param("tacheId") Long tacheId, @Param("du") LocalDate du, @Param("au") LocalDate au);
 
 	/**
 	 * Total des heures saisies par un utilisateur sur une journée.

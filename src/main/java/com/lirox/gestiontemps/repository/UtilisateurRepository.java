@@ -35,6 +35,18 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, Long> 
 	boolean existsByEmailAndIdNot(String email, Long id);
 
 	/**
+	 * @param sujet identifiant du compte chez le fournisseur OIDC (revendication {@code sub})
+	 * @return l'utilisateur rattaché à ce compte
+	 */
+	Optional<Utilisateur> findBySujet(String sujet);
+
+	/**
+	 * @param email adresse email
+	 * @return l'utilisateur ayant cet email
+	 */
+	Optional<Utilisateur> findByEmail(String email);
+
+	/**
 	 * Charge l'utilisateur en posant un verrou en écriture sur sa ligne ({@code select … for update})
 	 * jusqu'à la fin de la transaction : les transactions qui demandent le même verrou attendent.
 	 * Sert à sérialiser les écritures de saisies d'un même utilisateur (total journalier). L'attente

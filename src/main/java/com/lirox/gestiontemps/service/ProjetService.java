@@ -12,6 +12,7 @@ import com.lirox.gestiontemps.exception.DuplicateResourceException;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.exception.ResourceInUseException;
 import com.lirox.gestiontemps.exception.ResourceNotFoundException;
+import com.lirox.gestiontemps.repository.MembreProjetRepository;
 import com.lirox.gestiontemps.repository.ProjetRepository;
 import com.lirox.gestiontemps.repository.TacheRepository;
 
@@ -27,6 +28,7 @@ public class ProjetService {
 
 	private final ProjetRepository projetRepository;
 	private final TacheRepository tacheRepository;
+	private final MembreProjetRepository membreProjetRepository;
 
 	/**
 	 * @return tous les projets
@@ -82,7 +84,8 @@ public class ProjetService {
 	/**
 	 * @param id identifiant du projet à supprimer
 	 * @throws ResourceNotFoundException si le projet n'existe pas
-	 * @throws ResourceInUseException    si le projet possède des tâches (le désactiver à la place)
+	 * @throws ResourceInUseException    si le projet possède des tâches (le désactiver à la place) ;
+	 *                                   ses membres sont retirés avec lui
 	 */
 	@Transactional
 	public void delete(Long id) {
@@ -90,10 +93,18 @@ public class ProjetService {
 		if (tacheRepository.existsByProjetId(id)) {
 			throw new ResourceInUseException("Le projet possède des tâches : désactivez-le plutôt");
 		}
+		membreProjetRepository.deleteByProjetId(id);
 		projetRepository.delete(projet);
 	}
 
-	private Projet getProjet(Long id) {
+	/**
+	 * Charge l'entité ; réservé aux autres services du paquet (ex. {@link MembreProjetService}).
+	 *
+	 * @param id identifiant du projet
+	 * @return l'entité projet
+	 * @throws ResourceNotFoundException si le projet n'existe pas
+	 */
+	Projet getProjet(Long id) {
 		return projetRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Projet", id));
 	}
 

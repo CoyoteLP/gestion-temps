@@ -16,10 +16,15 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -51,6 +56,11 @@ class SaisieTempsServiceTest {
 
 	private static final int DUREE_DEMANDEE = 4;
 
+	/** Appelant des tests : administrateur, pour ne tester ici que la concurrence et les verrous. */
+	private static final JwtAuthenticationToken ADMIN = new JwtAuthenticationToken(
+			Jwt.withTokenValue("jeton").header("alg", "none").subject("admin-test").build(),
+			List.of(new SimpleGrantedAuthority("ROLE_" + Constantes.ROLE_ADMIN)));
+
 	@Autowired
 	private SaisieTempsService saisieTempsService;
 
@@ -69,8 +79,14 @@ class SaisieTempsServiceTest {
 	@Autowired
 	private TransactionTemplate transactionTemplate;
 
+	@BeforeEach
+	void authentifierEnAdministrateur() {
+		SecurityContextHolder.getContext().setAuthentication(ADMIN);
+	}
+
 	@AfterEach
 	void viderLaBase() {
+		SecurityContextHolder.clearContext();
 		saisieTempsRepository.deleteAll();
 		tacheRepository.deleteAll();
 		projetRepository.deleteAll();
@@ -172,12 +188,16 @@ class SaisieTempsServiceTest {
 			for (Callable<Void> appel : appels) {
 				resultats.add(executor.submit(() -> {
 					depart.await();
+					SecurityContextHolder.getContext().setAuthentication(ADMIN);
 					try {
 						appel.call();
 						return true;
 					}
 					catch (BusinessRuleException e) {
 						return false;
+					}
+					finally {
+						SecurityContextHolder.clearContext();
 					}
 				}));
 			}

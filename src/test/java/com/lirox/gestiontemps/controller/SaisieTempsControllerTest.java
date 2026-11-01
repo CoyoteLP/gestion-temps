@@ -3,6 +3,8 @@ package com.lirox.gestiontemps.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.nullValue;
+import static com.lirox.gestiontemps.JetonsDeTest.collaborateur;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -23,6 +25,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -32,11 +35,15 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.lirox.gestiontemps.JetonsDeTest;
+import com.lirox.gestiontemps.domain.MembreProjet;
 import com.lirox.gestiontemps.domain.Projet;
+import com.lirox.gestiontemps.domain.RoleProjet;
 import com.lirox.gestiontemps.domain.SaisieTemps;
 import com.lirox.gestiontemps.domain.Tache;
 import com.lirox.gestiontemps.domain.Utilisateur;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
+import com.lirox.gestiontemps.repository.MembreProjetRepository;
 import com.lirox.gestiontemps.repository.ProjetRepository;
 import com.lirox.gestiontemps.repository.SaisieTempsRepository;
 import com.lirox.gestiontemps.repository.TacheRepository;
@@ -46,6 +53,7 @@ import com.lirox.gestiontemps.repository.UtilisateurRepository;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
+@Import(JetonsDeTest.AdministrateurParDefaut.class)
 class SaisieTempsControllerTest {
 
 	/** Date du jour vue par l'application pendant ces tests (horloge fixe). */
@@ -76,6 +84,9 @@ class SaisieTempsControllerTest {
 
 	@Autowired
 	private SaisieTempsRepository saisieTempsRepository;
+
+	@Autowired
+	private MembreProjetRepository membreProjetRepository;
 
 	private Utilisateur utilisateur;
 
@@ -111,10 +122,10 @@ class SaisieTempsControllerTest {
 	@Test
 	void createRefuseUneRequeteInvalide() throws Exception {
 		mockMvc.perform(post("/api/saisies-temps").contentType(MediaType.APPLICATION_JSON).content("""
-				{"tacheId": %d, "duree": 25}
-				""".formatted(tache.getId())))
+				{"duree": 25}
+				"""))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.message", containsString("utilisateurId :")))
+				.andExpect(jsonPath("$.message", containsString("tacheId :")))
 				.andExpect(jsonPath("$.message", containsString("duree :")));
 	}
 
@@ -476,6 +487,170 @@ class SaisieTempsControllerTest {
 				.andExpect(status().isConflict());
 		mockMvc.perform(delete("/api/utilisateurs/{id}", utilisateur.getId()))
 				.andExpect(status().isConflict());
+	}
+
+	// Droits d'accès d'un collaborateur : jeton sans rôle administrateur, compte rattaché (sujet)
+
+	@Test
+	void unCollaborateurSaisitPourLuiSansPreciserLUtilisateur() throws Exception {
+		Utilisateur collaborateur = saveCollaborateur("cdurand@lirox.com");
+		mockMvc.perform(post("/api/saisies-temps").with(collaborateur(collaborateur))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"tacheId": %d, "jour": "2026-10-30", "duree": 2}
+						""".formatted(tache.getId())))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.utilisateurId").value(collaborateur.getId()));
+	}
+
+	@Test
+	void unCollaborateurNePeutPasSaisirPourUnAutre() throws Exception {
+		Utilisateur collaborateur = saveCollaborateur("cdurand@lirox.com");
+		mockMvc.perform(post("/api/saisies-temps").with(collaborateur(collaborateur))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"utilisateurId": %d, "tacheId": %d, "jour": "2026-10-30", "duree": 2}
+						""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message").value("Vous ne pouvez saisir du temps que pour vous-même"));
+		assertThat(saisieTempsRepository.count()).isZero();
+	}
+
+	@Test
+	void unCollaborateurNeModifieNiNeSupprimeQueSesSaisies() throws Exception {
+		Utilisateur collaborateur = saveCollaborateur("cdurand@lirox.com");
+		SaisieTemps saisieDUnAutre = save(utilisateur, LocalDate.of(2026, 10, 30));
+		SaisieTemps saSaisie = save(collaborateur, LocalDate.of(2026, 10, 30));
+		mockMvc.perform(put("/api/saisies-temps/{id}", saisieDUnAutre.getId()).with(collaborateur(collaborateur))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"version": 0, "tacheId": %d, "duree": 5}
+						""".formatted(tache.getId())))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message").value("Vous ne pouvez modifier que vos propres saisies"));
+		mockMvc.perform(delete("/api/saisies-temps/{id}", saisieDUnAutre.getId()).with(collaborateur(collaborateur)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message").value("Vous ne pouvez supprimer que vos propres saisies"));
+		assertThat(saisieTempsRepository.findById(saisieDUnAutre.getId())).map(SaisieTemps::getDuree)
+				.contains(new BigDecimal("2.00"));
+
+		mockMvc.perform(put("/api/saisies-temps/{id}", saSaisie.getId()).with(collaborateur(collaborateur))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"version": 0, "tacheId": %d, "duree": 5}
+						""".formatted(tache.getId())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.duree").value(5));
+		mockMvc.perform(delete("/api/saisies-temps/{id}", saSaisie.getId()).with(collaborateur(collaborateur)))
+				.andExpect(status().isOk());
+		assertThat(saisieTempsRepository.existsById(saSaisie.getId())).isFalse();
+	}
+
+	@Test
+	void unCollaborateurNePeutPasAttribuerSaSaisieAUnAutre() throws Exception {
+		Utilisateur collaborateur = saveCollaborateur("cdurand@lirox.com");
+		SaisieTemps saSaisie = save(collaborateur, LocalDate.of(2026, 10, 30));
+		mockMvc.perform(put("/api/saisies-temps/{id}", saSaisie.getId()).with(collaborateur(collaborateur))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "duree": 2}
+						""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void unCollaborateurNeVoitQueSesSaisies() throws Exception {
+		Utilisateur collaborateur = saveCollaborateur("cdurand@lirox.com");
+		SaisieTemps saisieDUnAutre = save(utilisateur, LocalDate.of(2026, 10, 30));
+		SaisieTemps saSaisie = save(collaborateur, LocalDate.of(2026, 10, 30));
+		mockMvc.perform(get("/api/saisies-temps").with(collaborateur(collaborateur)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()").value(1))
+				.andExpect(jsonPath("$.data[0].id").value(saSaisie.getId()));
+		mockMvc.perform(get("/api/saisies-temps").param("utilisateurId", utilisateur.getId().toString())
+				.with(collaborateur(collaborateur)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message")
+						.value("Vous ne pouvez consulter que vos saisies ou celles des projets dont vous êtes membre"));
+		mockMvc.perform(get("/api/saisies-temps/{id}", saisieDUnAutre.getId()).with(collaborateur(collaborateur)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message").value("Vous n'avez pas accès à cette saisie"));
+		mockMvc.perform(get("/api/saisies-temps/{id}", saSaisie.getId()).with(collaborateur(collaborateur)))
+				.andExpect(status().isOk());
+	}
+
+	@Test
+	void unMembreDuProjetVoitToutesLesSaisiesDuProjetEtSeulementCelles() throws Exception {
+		Utilisateur membre = saveCollaborateur("cdurand@lirox.com");
+		saveMembre(tache.getProjet(), membre, RoleProjet.BACKUP);
+		SaisieTemps saisieDUnAutre = save(utilisateur, LocalDate.of(2026, 10, 30));
+		save(membre, LocalDate.of(2026, 10, 30));
+		Tache tacheHorsProjet = saveTache("PRJ-02");
+		SaisieTemps saisieHorsProjet = save(utilisateur, LocalDate.of(2026, 10, 31));
+		saisieHorsProjet.setTache(tacheHorsProjet);
+
+		mockMvc.perform(get("/api/saisies-temps").param("projetId", tache.getProjet().getId().toString())
+				.with(collaborateur(membre)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()").value(2));
+		mockMvc.perform(get("/api/saisies-temps").param("tacheId", tache.getId().toString())
+				.param("utilisateurId", utilisateur.getId().toString()).with(collaborateur(membre)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()").value(1))
+				.andExpect(jsonPath("$.data[0].id").value(saisieDUnAutre.getId()));
+		mockMvc.perform(get("/api/saisies-temps/{id}", saisieDUnAutre.getId()).with(collaborateur(membre)))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(get("/api/saisies-temps").param("projetId", tacheHorsProjet.getProjet().getId().toString())
+				.with(collaborateur(membre)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()").value(0));
+		mockMvc.perform(get("/api/saisies-temps/{id}", saisieHorsProjet.getId()).with(collaborateur(membre)))
+				.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void unCompteNonRattacheNAccedePasAuxSaisies() throws Exception {
+		mockMvc.perform(get("/api/saisies-temps").with(jwt().jwt(jeton -> jeton.subject("inconnu"))))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message")
+						.value("Aucun utilisateur ne correspond à votre compte : contactez un administrateur"));
+		mockMvc.perform(post("/api/saisies-temps").with(jwt().jwt(jeton -> jeton.subject("inconnu")))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"tacheId": %d, "duree": 2}
+						""".formatted(tache.getId())))
+				.andExpect(status().isForbidden());
+		assertThat(saisieTempsRepository.count()).isZero();
+	}
+
+	@Test
+	void unAdministrateurSansUtilisateurRattacheDoitPreciserLUtilisateur() throws Exception {
+		mockMvc.perform(post("/api/saisies-temps").contentType(MediaType.APPLICATION_JSON).content("""
+				{"tacheId": %d, "duree": 2}
+				""".formatted(tache.getId())))
+				.andExpect(status().isForbidden());
+		assertThat(saisieTempsRepository.count()).isZero();
+	}
+
+	/** Utilisateur dont le compte OIDC est déjà rattaché (sujet renseigné). */
+	private Utilisateur saveCollaborateur(String email) {
+		Utilisateur u = saveUtilisateur(email);
+		u.setSujet("sujet-" + email);
+		return u;
+	}
+
+	private Tache saveTache(String codeProjet) {
+		Projet p = new Projet();
+		p.setCode(codeProjet);
+		p.setNom("Projet " + codeProjet);
+		projetRepository.save(p);
+		Tache t = new Tache();
+		t.setProjet(p);
+		t.setLibelle("Dev");
+		return tacheRepository.save(t);
+	}
+
+	private MembreProjet saveMembre(Projet p, Utilisateur u, RoleProjet role) {
+		MembreProjet membre = new MembreProjet();
+		membre.setProjet(p);
+		membre.setUtilisateur(u);
+		membre.setRole(role);
+		return membreProjetRepository.save(membre);
 	}
 
 	private Utilisateur saveUtilisateur(String email) {

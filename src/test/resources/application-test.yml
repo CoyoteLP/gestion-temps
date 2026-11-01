@@ -5,3 +5,11 @@ spring:
   datasource:
     url: jdbc:tc:mariadb:11.4:///gestion_temps
     driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Jamais contacté : les tests fournissent leurs jetons avec jwt() de spring-security-test, ou
+          # signent de vrais jetons avec une clé générée au démarrage (SecurityConfigTest)
+          issuer-uri: https://oidc.invalid/test
+          audiences: gestion-temps-api

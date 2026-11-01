@@ -1,0 +1,21 @@
+# Keycloak de développement : fournisseur OIDC local avec le royaume gestion-temps et des comptes de
+# test (voir realm-gestion-temps.json). Jamais en production.
+#
+#   docker compose -f docker/keycloak/compose.yaml up -d     # démarrer (≈ 30 s au premier lancement)
+#   docker compose -f docker/keycloak/compose.yaml down      # arrêter (le royaume est réimporté au démarrage)
+#
+# API : OIDC_ISSUER_URI=http://localhost:8180/realms/gestion-temps dans .env
+# Console d'administration : http://localhost:8180/admin (admin / KEYCLOAK_ADMIN_PASSWORD, « admin » par défaut)
+name: gestion-temps-keycloak
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.7
+    command: start-dev --import-realm --http-port=8180
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    ports:
+      - "8180:8180"
+    volumes:
+      - ./realm-gestion-temps.json:/opt/keycloak/data/import/realm-gestion-temps.json:ro
