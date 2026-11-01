@@ -54,8 +54,9 @@ rappel ; en cas de divergence, `CLAUDE.md` fait foi.
 **Entités et base de données**
 - Lombok `@Getter @Setter @NoArgsConstructor`, jamais `@Data`.
 - `@ManyToOne(fetch = FetchType.LAZY, optional = false)` + `@JoinColumn` explicite.
-- Nouvelle entité ou colonne → migration du schéma de production à prévoir (profil `prod` en
-  `ddl-auto: validate`) : le signaler.
+- Nouvelle entité, colonne, contrainte ou index → nouveau script Flyway `V<n>__….sql` dans la même
+  PR (*Bloquant* s'il manque : l'application ne démarre plus, `ddl-auto: validate`).
+- Script Flyway déjà fusionné modifié → *Bloquant* (la somme de contrôle ne correspond plus en production).
 
 **Règles métier** (voir la section dédiée de `CLAUDE.md`)
 - Une modification ne doit pas contourner une règle existante : suppression d'une ressource
@@ -150,8 +151,8 @@ volume de données.
 - Liste renvoyée sans limite (`findAll()` exposé tel quel) sur une table appelée à grossir
   (`saisie_temps`) : le signaler en *Suggestion* avec une pagination (`Pageable`) ou un filtre
   obligatoire.
-- Colonne utilisée en filtre fréquent (`jour`, clés étrangères) sans index : le signaler pour la
-  migration du schéma de production.
+- Colonne utilisée en filtre fréquent (`jour`, clés étrangères) sans index : proposer l'index
+  dans un script Flyway.
 
 **Transactions**
 - Lecture seule : `@Transactional(readOnly = true)` (hérité de la classe de service).

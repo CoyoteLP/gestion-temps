@@ -1,9 +1,7 @@
-# Profil de production : MariaDB, paramètres fournis par variables d'environnement
+# Profil de production : MariaDB, paramètres fournis par variables d'environnement.
+# Les migrations Flyway sont appliquées au démarrage, puis Hibernate valide le schéma.
 spring:
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
-  jpa:
-    hibernate:
-      ddl-auto: validate
