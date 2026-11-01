@@ -8,6 +8,7 @@ import com.lirox.gestiontemps.domain.Projet;
  * Projet renvoyé par l'API.
  *
  * @param id          identifiant
+ * @param version     version courante, à renvoyer pour modifier le projet
  * @param code        code court et unique
  * @param nom         nom du projet
  * @param description description libre
@@ -17,6 +18,7 @@ import com.lirox.gestiontemps.domain.Projet;
  */
 public record ProjetResponse(
 		Long id,
+		long version,
 		String code,
 		String nom,
 		String description,
@@ -29,7 +31,7 @@ public record ProjetResponse(
 	 * @return la représentation API du projet
 	 */
 	public static ProjetResponse from(Projet projet) {
-		return new ProjetResponse(projet.getId(), projet.getCode(), projet.getNom(), projet.getDescription(),
+		return new ProjetResponse(projet.getId(), projet.getVersion(), projet.getCode(), projet.getNom(), projet.getDescription(),
 				projet.getDateDebut(), projet.getDateFin(), projet.isActif());
 	}
 

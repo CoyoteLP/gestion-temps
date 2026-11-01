@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,8 +19,10 @@ import com.lirox.gestiontemps.dto.ApiResponse;
 import com.lirox.gestiontemps.dto.UtilisateurRequest;
 import com.lirox.gestiontemps.dto.UtilisateurResponse;
 import com.lirox.gestiontemps.service.UtilisateurService;
+import com.lirox.gestiontemps.validation.Modification;
 
 import jakarta.validation.Valid;
+import jakarta.validation.groups.Default;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -71,12 +74,12 @@ public class UtilisateurController {
 	 * {@code PUT /api/utilisateurs/{id}} : modification d'un utilisateur.
 	 *
 	 * @param id      identifiant de l'utilisateur
-	 * @param request nouvelles données
+	 * @param request nouvelles données, avec la version lue (400 si absente, 409 si périmée)
 	 * @return l'utilisateur modifié
 	 */
 	@PutMapping("/{id}")
 	public ApiResponse<UtilisateurResponse> update(@PathVariable Long id,
-			@Valid @RequestBody UtilisateurRequest request) {
+			@Validated({ Default.class, Modification.class }) @RequestBody UtilisateurRequest request) {
 		return ApiResponse.success(utilisateurService.update(id, request));
 	}
 

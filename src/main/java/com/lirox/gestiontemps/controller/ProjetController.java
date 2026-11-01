@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,8 +19,10 @@ import com.lirox.gestiontemps.dto.ApiResponse;
 import com.lirox.gestiontemps.dto.ProjetRequest;
 import com.lirox.gestiontemps.dto.ProjetResponse;
 import com.lirox.gestiontemps.service.ProjetService;
+import com.lirox.gestiontemps.validation.Modification;
 
 import jakarta.validation.Valid;
+import jakarta.validation.groups.Default;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -71,11 +74,12 @@ public class ProjetController {
 	 * {@code PUT /api/projets/{id}} : modification d'un projet.
 	 *
 	 * @param id      identifiant du projet
-	 * @param request nouvelles données
+	 * @param request nouvelles données, avec la version lue (400 si absente, 409 si périmée)
 	 * @return le projet modifié
 	 */
 	@PutMapping("/{id}")
-	public ApiResponse<ProjetResponse> update(@PathVariable Long id, @Valid @RequestBody ProjetRequest request) {
+	public ApiResponse<ProjetResponse> update(@PathVariable Long id,
+			@Validated({ Default.class, Modification.class }) @RequestBody ProjetRequest request) {
 		return ApiResponse.success(projetService.update(id, request));
 	}
 

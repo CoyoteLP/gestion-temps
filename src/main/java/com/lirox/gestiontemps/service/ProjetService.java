@@ -9,6 +9,7 @@ import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.dto.ProjetRequest;
 import com.lirox.gestiontemps.dto.ProjetResponse;
 import com.lirox.gestiontemps.exception.DuplicateResourceException;
+import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.exception.ResourceInUseException;
 import com.lirox.gestiontemps.exception.ResourceNotFoundException;
 import com.lirox.gestiontemps.repository.ProjetRepository;
@@ -64,14 +65,17 @@ public class ProjetService {
 	 * @return le projet modifié
 	 * @throws ResourceNotFoundException  si le projet n'existe pas
 	 * @throws DuplicateResourceException si le code est déjà utilisé par un autre projet
+	 * @throws ModificationConcurrenteException si la version envoyée n'est plus celle en base
 	 */
 	@Transactional
 	public ProjetResponse update(Long id, ProjetRequest request) {
 		Projet projet = getProjet(id);
+		VerrouOptimiste.verifier(projet.getVersion(), request.version());
 		if (projetRepository.existsByCodeAndIdNot(request.code(), id)) {
 			throw codeDejaUtilise(request.code());
 		}
 		apply(request, projet);
+		projetRepository.flush();
 		return ProjetResponse.from(projet);
 	}
 

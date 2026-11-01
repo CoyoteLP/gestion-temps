@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.domain.Tache;
+import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.repository.ProjetRepository;
 import com.lirox.gestiontemps.repository.TacheRepository;
 
@@ -96,11 +97,54 @@ class TacheControllerTest {
 	void updateModifieLaTache() throws Exception {
 		Tache tache = save(projet, "Dev");
 		mockMvc.perform(put("/api/taches/{id}", tache.getId()).contentType(MediaType.APPLICATION_JSON).content("""
-				{"projetId": %d, "libelle": "Développement", "actif": false}
+				{"version": 0, "projetId": %d, "libelle": "Développement", "actif": false}
 				""".formatted(projet.getId())))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.libelle").value("Développement"))
 				.andExpect(jsonPath("$.data.actif").value(false));
+	}
+
+	@Test
+	void updateIncrementeLaVersion() throws Exception {
+		Tache tache = save(projet, "Dev");
+		mockMvc.perform(put("/api/taches/{id}", tache.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "projetId": %d, "libelle": "Développement"}
+						""".formatted(projet.getId())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.version").value(1));
+	}
+
+	@Test
+	void updateRefuseUneVersionPerimee() throws Exception {
+		Tache tache = save(projet, "Dev");
+		mockMvc.perform(put("/api/taches/{id}", tache.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "projetId": %d, "libelle": "Développement"}
+						""".formatted(projet.getId())))
+				.andExpect(status().isOk());
+		mockMvc.perform(put("/api/taches/{id}", tache.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "projetId": %d, "libelle": "Recette"}
+						""".formatted(projet.getId())))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value(ModificationConcurrenteException.MESSAGE));
+		mockMvc.perform(get("/api/taches/{id}", tache.getId()))
+				.andExpect(jsonPath("$.data.libelle").value("Développement"))
+				.andExpect(jsonPath("$.data.version").value(1));
+	}
+
+	@Test
+	void updateRefuseUneRequeteSansVersion() throws Exception {
+		Tache tache = save(projet, "Dev");
+		mockMvc.perform(put("/api/taches/{id}", tache.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"projetId": %d, "libelle": "Développement"}
+						""".formatted(projet.getId())))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value("Requête invalide : version : est obligatoire en modification"));
+		mockMvc.perform(get("/api/taches/{id}", tache.getId()))
+				.andExpect(jsonPath("$.data.version").value(0));
 	}
 
 	@Test
@@ -123,7 +167,7 @@ class TacheControllerTest {
 	void updateRetourne404SiProjetInconnuSansModifierLaTache() throws Exception {
 		Tache tache = save(projet, "Dev");
 		mockMvc.perform(put("/api/taches/{id}", tache.getId()).contentType(MediaType.APPLICATION_JSON).content("""
-				{"projetId": 9999, "libelle": "Développement"}
+				{"version": 0, "projetId": 9999, "libelle": "Développement"}
 				"""))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.message").value("Projet introuvable (id=9999)"));
@@ -138,7 +182,7 @@ class TacheControllerTest {
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.message").value("Tâche introuvable (id=9999)"));
 		mockMvc.perform(put("/api/taches/{id}", 9999).contentType(MediaType.APPLICATION_JSON).content("""
-				{"projetId": %d, "libelle": "Développement"}
+				{"version": 0, "projetId": %d, "libelle": "Développement"}
 				""".formatted(projet.getId())))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.message").value("Tâche introuvable (id=9999)"));

@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,8 +21,10 @@ import com.lirox.gestiontemps.dto.ApiResponse;
 import com.lirox.gestiontemps.dto.SaisieTempsRequest;
 import com.lirox.gestiontemps.dto.SaisieTempsResponse;
 import com.lirox.gestiontemps.service.SaisieTempsService;
+import com.lirox.gestiontemps.validation.Modification;
 
 import jakarta.validation.Valid;
+import jakarta.validation.groups.Default;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -81,12 +84,12 @@ public class SaisieTempsController {
 	 * {@code PUT /api/saisies-temps/{id}} : modification d'une saisie (422 si une règle métier est enfreinte).
 	 *
 	 * @param id      identifiant de la saisie
-	 * @param request nouvelles données
+	 * @param request nouvelles données, avec la version lue (400 si absente, 409 si périmée)
 	 * @return la saisie modifiée
 	 */
 	@PutMapping("/{id}")
 	public ApiResponse<SaisieTempsResponse> update(@PathVariable Long id,
-			@Valid @RequestBody SaisieTempsRequest request) {
+			@Validated({ Default.class, Modification.class }) @RequestBody SaisieTempsRequest request) {
 		return ApiResponse.success(saisieTempsService.update(id, request));
 	}
 

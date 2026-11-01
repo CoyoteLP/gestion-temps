@@ -108,6 +108,10 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - Le `Response` expose une fabrique `static from(Entite)` ; les relations sont exposées par leur id
   (`projetId`, `tacheId`).
 - Un champ booléen optionnel en entrée est un `Boolean` (null = valeur par défaut).
+- Verrouillage optimiste : chaque entité a un `@Version Long version` (colonne `version`), exposé
+  dans le `Response`. Le `Request` porte un `Long version` annoté
+  `@NotNull(groups = Modification.class, message = "est obligatoire en modification")` : obligatoire
+  en `PUT`, ignoré en création.
 
 ### Services
 - `@Service @RequiredArgsConstructor @Transactional(readOnly = true)` sur la classe,
@@ -116,9 +120,21 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - Les règles métier vivent ici, pas dans les contrôleurs ni les entités.
 - Un service peut réutiliser la méthode `getXxx(id)` (visibilité paquet) d'un autre service pour
   charger une entité avec la bonne erreur 404.
+- `update` : après `getXxx(id)`, `VerrouOptimiste.verifier(entite.getVersion(), request.version())`
+  (409 si le client a lu une version périmée) ; après `apply`, `repository.flush()` avant de
+  convertir en `Response`, pour renvoyer la version incrémentée.
+- Une règle qui dépend de plusieurs lignes (ex. total journalier) se protège des écritures
+  simultanées par un verrou pessimiste sur la ligne parente (`@Lock(PESSIMISTIC_WRITE)` avec un
+  délai d'attente borné par `@QueryHint` dans le repository, voir
+  `UtilisateurRepository.findVerrouilleById`). Le verrou est posé **en premier**, avant toute autre
+  lecture de la transaction : sous MariaDB (REPEATABLE READ), la première lecture fige la vue de la
+  transaction, et un calcul fait après coup ignorerait les écritures validées pendant l'attente.
+- Date du jour : `LocalDate.now(clock)` avec le bean `Clock`, dans le fuseau
+  `Constantes.FUSEAU_HORAIRE` ; jamais `LocalDate.now()` sans argument.
 
 ### Contrôleurs
-- Retournent toujours une `ApiResponse<T>` (voir ci-dessous) ; `@Valid @RequestBody` sur les entrées.
+- Retournent toujours une `ApiResponse<T>` (voir ci-dessous) ; `@Valid @RequestBody` sur les entrées,
+  `@Validated({ Default.class, Modification.class }) @RequestBody` sur les `PUT`.
 - `POST` → 201 + en-tête `Location` ; `DELETE` → 200 avec `data: null` et un message de confirmation.
 - Les filtres de liste sont des `@RequestParam(required = false)`.
 
@@ -137,17 +153,25 @@ erreur, **lever une exception héritant de `ApplicationException`** ; ne jamais 
 
 Chaque exception porte son code HTTP, que `GlobalExceptionHandler` applique automatiquement :
 
-| Exception                     | HTTP | Usage                                                   |
-|-------------------------------|------|---------------------------------------------------------|
-| `ResourceNotFoundException`   | 404  | entité introuvable                                      |
-| `DuplicateResourceException`  | 409  | contrainte d'unicité (code, email…)                     |
-| `ResourceInUseException`      | 409  | suppression d'une ressource encore référencée           |
-| `BusinessRuleException`       | 422  | règle métier enfreinte (24 h/jour, ressource inactive…) |
-| `ApplicationException`        | 500  | erreur technique (utilisée directement)                 |
-| validation Bean Validation    | 400  | gérée automatiquement, champs en cause dans `message`   |
+| Exception                          | HTTP | Usage                                                   |
+|------------------------------------|------|---------------------------------------------------------|
+| `ResourceNotFoundException`        | 404  | entité introuvable                                      |
+| `DuplicateResourceException`       | 409  | contrainte d'unicité (code, email…)                     |
+| `ResourceInUseException`           | 409  | suppression d'une ressource encore référencée           |
+| `ModificationConcurrenteException` | 409  | version périmée envoyée en modification                 |
+| `BusinessRuleException`            | 422  | règle métier enfreinte (24 h/jour, ressource inactive…) |
+| `ApplicationException`             | 500  | erreur technique (utilisée directement)                 |
+| validation Bean Validation         | 400  | gérée automatiquement, champs en cause dans `message`   |
 
 Pour un nouveau cas, créer une sous-classe d'`ApplicationException` qui passe son `HttpStatus` au
 constructeur parent : aucun handler supplémentaire n'est nécessaire.
+
+`GlobalExceptionHandler` traduit aussi trois exceptions techniques levées en cas d'accès
+concurrents, toutes en 409 sans détail SQL : `DataIntegrityViolationException` (contrainte de base,
+ex. doublon créé simultanément ; seul le nom de la contrainte est journalisé, jamais la valeur),
+`ObjectOptimisticLockingFailureException` (`@Version`) et `PessimisticLockingFailureException`
+(verrou non obtenu dans le délai). Les erreurs de Spring MVC (400, 404, 405, 415) ont des messages
+en français.
 
 Messages d'erreur en français, compréhensibles par un utilisateur final.
 

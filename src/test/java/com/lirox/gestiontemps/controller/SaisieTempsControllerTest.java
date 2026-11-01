@@ -36,6 +36,7 @@ import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.domain.SaisieTemps;
 import com.lirox.gestiontemps.domain.Tache;
 import com.lirox.gestiontemps.domain.Utilisateur;
+import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.repository.ProjetRepository;
 import com.lirox.gestiontemps.repository.SaisieTempsRepository;
 import com.lirox.gestiontemps.repository.TacheRepository;
@@ -176,7 +177,7 @@ class SaisieTempsControllerTest {
 		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 10, 1));
 		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"utilisateurId": %d, "tacheId": %d, "duree": 2.25}
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "duree": 2.25}
 						""".formatted(utilisateur.getId(), tache.getId())))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.message", containsString("duree : doit être un multiple de 0.5 h")));
@@ -205,7 +206,7 @@ class SaisieTempsControllerTest {
 		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 3, 2));
 		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"utilisateurId": %d, "tacheId": %d, "duree": 4}
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "duree": 4}
 						""".formatted(utilisateur.getId(), tache.getId())))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.jour").value("2026-03-02"));
@@ -245,7 +246,7 @@ class SaisieTempsControllerTest {
 		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 10, 1));
 		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"utilisateurId": 9999, "tacheId": %d, "jour": "2026-10-02", "duree": 5}
+						{"version": 0, "utilisateurId": 9999, "tacheId": %d, "jour": "2026-10-02", "duree": 5}
 						""".formatted(tache.getId())))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.message").value("Utilisateur introuvable (id=9999)"));
@@ -285,7 +286,7 @@ class SaisieTempsControllerTest {
 		tacheRepository.save(inactive);
 		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"utilisateurId": %d, "tacheId": %d, "jour": "2026-10-30", "duree": 1}
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "jour": "2026-10-30", "duree": 1}
 						""".formatted(utilisateur.getId(), inactive.getId())))
 				.andExpect(status().isUnprocessableContent());
 	}
@@ -308,11 +309,54 @@ class SaisieTempsControllerTest {
 		tache.getProjet().setActif(false);
 		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"utilisateurId": %d, "tacheId": %d, "jour": "2026-10-30", "duree": 3, "commentaire": "Corrigé"}
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "jour": "2026-10-30", "duree": 3, "commentaire": "Corrigé"}
 						""".formatted(utilisateur.getId(), tache.getId())))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.duree").value(3))
 				.andExpect(jsonPath("$.data.commentaire").value("Corrigé"));
+	}
+
+	@Test
+	void updateIncrementeLaVersion() throws Exception {
+		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 10, 30));
+		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "duree": 3}
+						""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.version").value(1));
+	}
+
+	@Test
+	void updateRefuseUneVersionPerimee() throws Exception {
+		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 10, 30));
+		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "duree": 3}
+						""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isOk());
+		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "duree": 6}
+						""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value(ModificationConcurrenteException.MESSAGE));
+		mockMvc.perform(get("/api/saisies-temps/{id}", saisie.getId()))
+				.andExpect(jsonPath("$.data.duree").value(3))
+				.andExpect(jsonPath("$.data.version").value(1));
+	}
+
+	@Test
+	void updateRefuseUneRequeteSansVersion() throws Exception {
+		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 10, 30));
+		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"utilisateurId": %d, "tacheId": %d, "duree": 2}
+						""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value("Requête invalide : version : est obligatoire en modification"));
+		mockMvc.perform(get("/api/saisies-temps/{id}", saisie.getId()))
+				.andExpect(jsonPath("$.data.version").value(0));
 	}
 
 	@Test
@@ -322,7 +366,7 @@ class SaisieTempsControllerTest {
 		inactif.setActif(false);
 		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"utilisateurId": %d, "tacheId": %d, "jour": "2026-10-30", "duree": 1}
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "jour": "2026-10-30", "duree": 1}
 						""".formatted(inactif.getId(), tache.getId())))
 				.andExpect(status().isUnprocessableContent());
 	}
@@ -370,7 +414,7 @@ class SaisieTempsControllerTest {
 		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 10, 30), "20");
 		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"utilisateurId": %d, "tacheId": %d, "jour": "2026-10-30", "duree": 22}
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "jour": "2026-10-30", "duree": 22}
 						""".formatted(utilisateur.getId(), tache.getId())))
 				.andExpect(status().isOk());
 	}
@@ -381,7 +425,7 @@ class SaisieTempsControllerTest {
 		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 10, 30), "2");
 		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"utilisateurId": %d, "tacheId": %d, "jour": "2026-10-30", "duree": 5}
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "jour": "2026-10-30", "duree": 5}
 						""".formatted(utilisateur.getId(), tache.getId())))
 				.andExpect(status().isUnprocessableContent());
 	}
@@ -409,7 +453,7 @@ class SaisieTempsControllerTest {
 		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 10, 1));
 		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"utilisateurId": %d, "tacheId": %d, "jour": "2026-10-02", "duree": 3.5}
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "jour": "2026-10-02", "duree": 3.5}
 						""".formatted(utilisateur.getId(), tache.getId())))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.jour").value("2026-10-02"))

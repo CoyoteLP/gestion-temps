@@ -9,6 +9,7 @@ import com.lirox.gestiontemps.domain.Utilisateur;
 import com.lirox.gestiontemps.dto.UtilisateurRequest;
 import com.lirox.gestiontemps.dto.UtilisateurResponse;
 import com.lirox.gestiontemps.exception.DuplicateResourceException;
+import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.exception.ResourceInUseException;
 import com.lirox.gestiontemps.exception.ResourceNotFoundException;
 import com.lirox.gestiontemps.repository.SaisieTempsRepository;
@@ -65,14 +66,17 @@ public class UtilisateurService {
 	 * @return l'utilisateur modifié
 	 * @throws ResourceNotFoundException  si l'utilisateur n'existe pas
 	 * @throws DuplicateResourceException si l'email est déjà utilisé par un autre utilisateur
+	 * @throws ModificationConcurrenteException si la version envoyée n'est plus celle en base
 	 */
 	@Transactional
 	public UtilisateurResponse update(Long id, UtilisateurRequest request) {
 		Utilisateur utilisateur = getUtilisateur(id);
+		VerrouOptimiste.verifier(utilisateur.getVersion(), request.version());
 		if (utilisateurRepository.existsByEmailAndIdNot(request.email(), id)) {
 			throw emailDejaUtilise(request.email());
 		}
 		apply(request, utilisateur);
+		utilisateurRepository.flush();
 		return UtilisateurResponse.from(utilisateur);
 	}
 
@@ -99,6 +103,19 @@ public class UtilisateurService {
 	 */
 	Utilisateur getUtilisateur(Long id) {
 		return utilisateurRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Utilisateur", id));
+	}
+
+	/**
+	 * Charge l'entité en la verrouillant jusqu'à la fin de la transaction en cours, pour sérialiser
+	 * les écritures qui dépendent de l'ensemble de ses données (ex. total journalier des saisies).
+	 *
+	 * @param id identifiant de l'utilisateur
+	 * @return l'entité utilisateur, verrouillée
+	 * @throws ResourceNotFoundException si l'utilisateur n'existe pas
+	 */
+	Utilisateur getUtilisateurVerrouille(Long id) {
+		return utilisateurRepository.findVerrouilleById(id)
+				.orElseThrow(() -> new ResourceNotFoundException("Utilisateur", id));
 	}
 
 	private static void apply(UtilisateurRequest request, Utilisateur utilisateur) {

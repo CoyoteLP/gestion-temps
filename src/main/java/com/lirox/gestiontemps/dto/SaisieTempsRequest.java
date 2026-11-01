@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.lirox.gestiontemps.common.Constantes;
+import com.lirox.gestiontemps.validation.Modification;
 import com.lirox.gestiontemps.validation.PasDe;
 
 import jakarta.validation.constraints.DecimalMax;
@@ -22,6 +23,8 @@ import jakarta.validation.constraints.Size;
  *                      {@value Constantes#DUREE_MAX_SAISIE} par pas de {@value Constantes#PAS_DUREE_SAISIE}
  *                      (ex. 1.5 = 1h30)
  * @param commentaire   commentaire libre, optionnel
+ * @param version       version lue avant modification, obligatoire en modification et ignorée
+ *                      en création ; un écart avec la version en base renvoie 409
  */
 public record SaisieTempsRequest(
 		@NotNull Long utilisateurId,
@@ -32,5 +35,6 @@ public record SaisieTempsRequest(
 		@DecimalMax(value = Constantes.DUREE_MAX_SAISIE, message = "ne doit pas dépasser {value} h")
 		@PasDe(value = Constantes.PAS_DUREE_SAISIE, message = "doit être un multiple de {value} h")
 		BigDecimal duree,
-		@Size(max = 500) String commentaire) {
+		@Size(max = 500) String commentaire,
+		@NotNull(groups = Modification.class, message = "est obligatoire en modification") Long version) {
 }
