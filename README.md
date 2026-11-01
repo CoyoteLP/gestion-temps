@@ -34,7 +34,9 @@ En profil `prod`, le même contrôle liste les variables d'environnement manquan
 - API : http://localhost:8080
 - Santé : http://localhost:8080/actuator/health
 
-Les tests (`./mvnw test`) utilisent une base H2 en mémoire et ne nécessitent pas MariaDB.
+Les tests (`./mvnw test`) utilisent une base MariaDB démarrée automatiquement dans un conteneur
+(Testcontainers) : Docker doit être lancé, mais ni MariaDB locale ni `.env` ne sont nécessaires.
+`./mvnw verify` vérifie en plus la couverture de tests (rapport : `target/site/jacoco/index.html`).
 
 En production : `SPRING_PROFILES_ACTIVE=prod` avec `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`.
 

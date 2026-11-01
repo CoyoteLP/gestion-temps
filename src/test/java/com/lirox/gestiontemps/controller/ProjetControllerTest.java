@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -152,6 +153,51 @@ class ProjetControllerTest {
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.message", containsString(champ + " :")));
 		assertThat(projetRepository.count()).isZero();
+	}
+
+	// Erreurs techniques de Spring MVC : code HTTP et enveloppe ApiResponse, quel que soit l'endpoint.
+	// Les messages par défaut de Spring sont en anglais (traduction prévue au lot 3) : seule leur
+	// présence est vérifiée ici.
+
+	@Test
+	void getProjetAvecUnIdNonNumeriqueRenvoie400() throws Exception {
+		mockMvc.perform(get("/api/projets/abc"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.status").value("error"))
+				.andExpect(jsonPath("$.data").doesNotExist())
+				.andExpect(jsonPath("$.message").isNotEmpty());
+	}
+
+	@Test
+	void methodeNonSupporteeRenvoie405() throws Exception {
+		mockMvc.perform(patch("/api/projets/1").contentType(MediaType.APPLICATION_JSON).content("{}"))
+				.andExpect(status().isMethodNotAllowed())
+				.andExpect(jsonPath("$.status").value("error"))
+				.andExpect(jsonPath("$.message").isNotEmpty());
+	}
+
+	@Test
+	void typeDeContenuNonSupporteRenvoie415() throws Exception {
+		mockMvc.perform(post("/api/projets").contentType(MediaType.TEXT_PLAIN).content("PRJ-01"))
+				.andExpect(status().isUnsupportedMediaType())
+				.andExpect(jsonPath("$.status").value("error"))
+				.andExpect(jsonPath("$.message").isNotEmpty());
+		assertThat(projetRepository.count()).isZero();
+	}
+
+	@Test
+	void urlInconnueRenvoie404() throws Exception {
+		mockMvc.perform(get("/api/inconnue"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.status").value("error"))
+				.andExpect(jsonPath("$.message").isNotEmpty());
+	}
+
+	@Test
+	void corpsJsonMalFormeRenvoie400() throws Exception {
+		mockMvc.perform(post("/api/projets").contentType(MediaType.APPLICATION_JSON).content("{\"code\": "))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value("Corps de requête JSON invalide"));
 	}
 
 	/** Corps de requête valide dont le champ indiqué est remplacé par la valeur donnée. */

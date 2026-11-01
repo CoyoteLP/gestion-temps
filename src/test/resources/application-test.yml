@@ -1,9 +1,9 @@
-# Profil de test : base H2 en mémoire, indépendante de MariaDB
+# Profil de test : MariaDB dans un conteneur Docker démarré par Testcontainers (URL jdbc:tc:),
+# partagé par toute la suite ; Docker doit être lancé. Aucune MariaDB locale ni .env requis.
 spring:
   datasource:
-    url: jdbc:h2:mem:gestiontemps-test;MODE=MariaDB;DB_CLOSE_DELAY=-1
-    username: sa
-    password:
+    url: jdbc:tc:mariadb:11.4:///gestion_temps
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
   jpa:
     hibernate:
       ddl-auto: create-drop
