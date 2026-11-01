@@ -21,6 +21,18 @@ public final class Constantes {
 	/** Pas d'une durée de saisie : la durée doit en être un multiple, en heures. */
 	public static final String PAS_DUREE_SAISIE = "0.5";
 
+	/**
+	 * Fuseau horaire de référence pour la date du jour, indépendant de celui du serveur (souvent UTC
+	 * dans un conteneur).
+	 */
+	public static final String FUSEAU_HORAIRE = "Europe/Paris";
+
+	/**
+	 * Attente maximale du verrou posé sur un utilisateur pendant l'écriture de ses saisies, en
+	 * millisecondes (texte : utilisable dans {@code @QueryHint}) ; au-delà, la requête est refusée.
+	 */
+	public static final String DELAI_VERROU_UTILISATEUR_MS = "5000";
+
 	private Constantes() {
 	}
 

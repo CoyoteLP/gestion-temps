@@ -27,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.lirox.gestiontemps.domain.Projet;
+import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.repository.ProjetRepository;
 
 @SpringBootTest
@@ -94,11 +95,63 @@ class ProjetControllerTest {
 	void updateModifieLeProjet() throws Exception {
 		Projet projet = save("PRJ-01");
 		mockMvc.perform(put("/api/projets/{id}", projet.getId()).contentType(MediaType.APPLICATION_JSON).content("""
-				{"code": "PRJ-01", "nom": "Nouveau nom", "actif": false}
+				{"version": 0, "code": "PRJ-01", "nom": "Nouveau nom", "actif": false}
 				"""))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.nom").value("Nouveau nom"))
 				.andExpect(jsonPath("$.data.actif").value(false));
+	}
+
+	@Test
+	void createIgnoreLaVersionEtDemarreAZero() throws Exception {
+		mockMvc.perform(post("/api/projets").contentType(MediaType.APPLICATION_JSON).content("""
+				{"version": 7, "code": "PRJ-01", "nom": "Projet"}
+				"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.version").value(0));
+	}
+
+	@Test
+	void updateIncrementeLaVersion() throws Exception {
+		Projet projet = save("PRJ-01");
+		mockMvc.perform(put("/api/projets/{id}", projet.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "code": "PRJ-01", "nom": "Première modification"}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.version").value(1));
+	}
+
+	@Test
+	void updateRefuseUneVersionPerimee() throws Exception {
+		Projet projet = save("PRJ-01");
+		mockMvc.perform(put("/api/projets/{id}", projet.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "code": "PRJ-01", "nom": "Première modification"}
+						"""))
+				.andExpect(status().isOk());
+		mockMvc.perform(put("/api/projets/{id}", projet.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "code": "PRJ-01", "nom": "Modification sur une version périmée"}
+						"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value(ModificationConcurrenteException.MESSAGE));
+		mockMvc.perform(get("/api/projets/{id}", projet.getId()))
+				.andExpect(jsonPath("$.data.nom").value("Première modification"))
+				.andExpect(jsonPath("$.data.version").value(1));
+	}
+
+	@Test
+	void updateRefuseUneRequeteSansVersion() throws Exception {
+		Projet projet = save("PRJ-01");
+		mockMvc.perform(put("/api/projets/{id}", projet.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"code": "PRJ-01", "nom": "Nouveau nom"}
+						"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value("Requête invalide : version : est obligatoire en modification"));
+		mockMvc.perform(get("/api/projets/{id}", projet.getId()))
+				.andExpect(jsonPath("$.data.version").value(0));
 	}
 
 	@Test
@@ -115,7 +168,7 @@ class ProjetControllerTest {
 		save("PRJ-01");
 		Projet projet = save("PRJ-02");
 		mockMvc.perform(put("/api/projets/{id}", projet.getId()).contentType(MediaType.APPLICATION_JSON).content("""
-				{"code": "PRJ-01", "nom": "Nouveau nom"}
+				{"version": 0, "code": "PRJ-01", "nom": "Nouveau nom"}
 				"""))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.message").value("Un projet avec le code 'PRJ-01' existe déjà"));
@@ -127,7 +180,7 @@ class ProjetControllerTest {
 	@Test
 	void updateEtDeleteRetournent404SiInconnu() throws Exception {
 		mockMvc.perform(put("/api/projets/{id}", 9999).contentType(MediaType.APPLICATION_JSON).content("""
-				{"code": "PRJ-01", "nom": "Projet"}
+				{"version": 0, "code": "PRJ-01", "nom": "Projet"}
 				"""))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.message").value("Projet introuvable (id=9999)"));
@@ -155,9 +208,8 @@ class ProjetControllerTest {
 		assertThat(projetRepository.count()).isZero();
 	}
 
-	// Erreurs techniques de Spring MVC : code HTTP et enveloppe ApiResponse, quel que soit l'endpoint.
-	// Les messages par défaut de Spring sont en anglais (traduction prévue au lot 3) : seule leur
-	// présence est vérifiée ici.
+	// Erreurs techniques de Spring MVC : code HTTP, enveloppe ApiResponse et message en français,
+	// quel que soit l'endpoint.
 
 	@Test
 	void getProjetAvecUnIdNonNumeriqueRenvoie400() throws Exception {
@@ -165,15 +217,16 @@ class ProjetControllerTest {
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.status").value("error"))
 				.andExpect(jsonPath("$.data").doesNotExist())
-				.andExpect(jsonPath("$.message").isNotEmpty());
+				.andExpect(jsonPath("$.message").value("Paramètre invalide : 'id' n'a pas le format attendu"));
 	}
 
 	@Test
 	void methodeNonSupporteeRenvoie405() throws Exception {
 		mockMvc.perform(patch("/api/projets/1").contentType(MediaType.APPLICATION_JSON).content("{}"))
 				.andExpect(status().isMethodNotAllowed())
+				.andExpect(header().exists("Allow"))
 				.andExpect(jsonPath("$.status").value("error"))
-				.andExpect(jsonPath("$.message").isNotEmpty());
+				.andExpect(jsonPath("$.message").value("La méthode PATCH n'est pas autorisée sur cette URL"));
 	}
 
 	@Test
@@ -181,7 +234,8 @@ class ProjetControllerTest {
 		mockMvc.perform(post("/api/projets").contentType(MediaType.TEXT_PLAIN).content("PRJ-01"))
 				.andExpect(status().isUnsupportedMediaType())
 				.andExpect(jsonPath("$.status").value("error"))
-				.andExpect(jsonPath("$.message").isNotEmpty());
+				.andExpect(jsonPath("$.message")
+						.value("Type de contenu non supporté : le corps doit être envoyé en application/json"));
 		assertThat(projetRepository.count()).isZero();
 	}
 
@@ -190,7 +244,7 @@ class ProjetControllerTest {
 		mockMvc.perform(get("/api/inconnue"))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.status").value("error"))
-				.andExpect(jsonPath("$.message").isNotEmpty());
+				.andExpect(jsonPath("$.message").value("URL inconnue : /api/inconnue"));
 	}
 
 	@Test

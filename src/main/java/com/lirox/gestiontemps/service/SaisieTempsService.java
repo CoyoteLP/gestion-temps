@@ -15,6 +15,7 @@ import com.lirox.gestiontemps.domain.Utilisateur;
 import com.lirox.gestiontemps.dto.SaisieTempsRequest;
 import com.lirox.gestiontemps.dto.SaisieTempsResponse;
 import com.lirox.gestiontemps.exception.BusinessRuleException;
+import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.exception.ResourceNotFoundException;
 import com.lirox.gestiontemps.repository.SaisieTempsRepository;
 
@@ -69,8 +70,9 @@ public class SaisieTempsService {
 	 */
 	@Transactional
 	public SaisieTempsResponse create(SaisieTempsRequest request) {
+		Utilisateur utilisateur = utilisateurService.getUtilisateurVerrouille(request.utilisateurId());
 		SaisieTemps saisie = new SaisieTemps();
-		apply(request, saisie);
+		apply(request, saisie, utilisateur);
 		return SaisieTempsResponse.from(saisieTempsRepository.save(saisie));
 	}
 
@@ -82,11 +84,17 @@ public class SaisieTempsService {
 	 * @return la saisie modifiée
 	 * @throws ResourceNotFoundException si la saisie, l'utilisateur ou la tâche n'existe pas
 	 * @throws BusinessRuleException     si une règle métier est enfreinte
+	 * @throws ModificationConcurrenteException si la version envoyée n'est plus celle en base
 	 */
 	@Transactional
 	public SaisieTempsResponse update(Long id, SaisieTempsRequest request) {
+		// Verrouiller avant toute lecture : sous MariaDB (REPEATABLE READ), la première lecture fige
+		// la vue de la transaction ; lue après le verrou, elle inclut les saisies de la requête précédente
+		Utilisateur utilisateur = utilisateurService.getUtilisateurVerrouille(request.utilisateurId());
 		SaisieTemps saisie = getSaisie(id);
-		apply(request, saisie);
+		VerrouOptimiste.verifier(saisie.getVersion(), request.version());
+		apply(request, saisie, utilisateur);
+		saisieTempsRepository.flush();
 		return SaisieTempsResponse.from(saisie);
 	}
 
@@ -107,9 +115,12 @@ public class SaisieTempsService {
 	/**
 	 * Les contrôles d'activité ne portent que sur une nouvelle affectation (création, ou changement
 	 * d'utilisateur/de tâche) : une saisie existante reste corrigeable après une désactivation.
+	 * <p>
+	 * {@code utilisateur} doit avoir été verrouillé par l'appelant <em>avant</em> toute autre lecture
+	 * de la transaction : deux écritures simultanées pour le même utilisateur s'exécutent alors l'une
+	 * après l'autre, et le total journalier de la seconde inclut la première.
 	 */
-	private void apply(SaisieTempsRequest request, SaisieTemps saisie) {
-		Utilisateur utilisateur = utilisateurService.getUtilisateur(request.utilisateurId());
+	private void apply(SaisieTempsRequest request, SaisieTemps saisie, Utilisateur utilisateur) {
 		boolean utilisateurChange = saisie.getUtilisateur() == null
 				|| !saisie.getUtilisateur().getId().equals(utilisateur.getId());
 		if (utilisateurChange && !utilisateur.isActif()) {

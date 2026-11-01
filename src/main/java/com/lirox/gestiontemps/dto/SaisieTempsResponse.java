@@ -9,6 +9,7 @@ import com.lirox.gestiontemps.domain.SaisieTemps;
  * Saisie de temps renvoyée par l'API.
  *
  * @param id            identifiant
+ * @param version       version courante, à renvoyer pour modifier la saisie
  * @param utilisateurId utilisateur ayant effectué le travail
  * @param tacheId       tâche sur laquelle le temps est imputé
  * @param jour          journée travaillée
@@ -17,6 +18,7 @@ import com.lirox.gestiontemps.domain.SaisieTemps;
  */
 public record SaisieTempsResponse(
 		Long id,
+		long version,
 		Long utilisateurId,
 		Long tacheId,
 		LocalDate jour,
@@ -28,7 +30,7 @@ public record SaisieTempsResponse(
 	 * @return la représentation API de la saisie
 	 */
 	public static SaisieTempsResponse from(SaisieTemps saisie) {
-		return new SaisieTempsResponse(saisie.getId(), saisie.getUtilisateur().getId(), saisie.getTache().getId(),
+		return new SaisieTempsResponse(saisie.getId(), saisie.getVersion(), saisie.getUtilisateur().getId(), saisie.getTache().getId(),
 				saisie.getJour(), saisie.getDuree(), saisie.getCommentaire());
 	}
 

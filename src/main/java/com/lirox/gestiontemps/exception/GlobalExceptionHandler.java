@@ -3,20 +3,28 @@ package com.lirox.gestiontemps.exception;
 import java.util.Comparator;
 import java.util.stream.Collectors;
 
+import org.hibernate.exception.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.TypeMismatchException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.lirox.gestiontemps.dto.ApiResponse;
 
@@ -30,6 +38,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
 	/**
 	 * Toutes les exceptions de l'application : le code HTTP est porté par l'exception elle-même.
+	 *
+	 * @param ex exception levée par un service
+	 * @return la réponse d'erreur, avec le code HTTP de l'exception
 	 */
 	@ExceptionHandler(ApplicationException.class)
 	public ResponseEntity<ApiResponse<Void>> handleApplication(ApplicationException ex) {
@@ -40,7 +51,54 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	}
 
 	/**
+	 * Contrainte de base de données enfreinte malgré les contrôles des services : en pratique, deux
+	 * requêtes simultanées (même code créé deux fois, suppression d'une ressource pendant qu'on la
+	 * référence). 409 sans exposer le détail SQL.
+	 *
+	 * @param ex violation remontée par la base
+	 * @return 409 avec un message destiné à l'utilisateur
+	 */
+	@ExceptionHandler(DataIntegrityViolationException.class)
+	public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(DataIntegrityViolationException ex) {
+		// Seul le nom de la contrainte est journalisé : le message de la base contient la valeur en
+		// cause (email, code…), donnée potentiellement personnelle
+		log.warn("Contrainte de base de données enfreinte : {}", nomContrainte(ex));
+		return error(HttpStatus.CONFLICT,
+				"L'opération entre en conflit avec des données existantes : rechargez-les puis réessayez");
+	}
+
+	/**
+	 * Verrou en écriture non obtenu dans le délai imparti (ex.
+	 * {@link com.lirox.gestiontemps.common.Constantes#DELAI_VERROU_UTILISATEUR_MS}) : une autre
+	 * requête modifie les mêmes données depuis trop longtemps.
+	 *
+	 * @param ex échec d'acquisition du verrou
+	 * @return 409 invitant à réessayer
+	 */
+	@ExceptionHandler(PessimisticLockingFailureException.class)
+	public ResponseEntity<ApiResponse<Void>> handlePessimisticLocking(PessimisticLockingFailureException ex) {
+		log.warn("Verrou non obtenu dans le délai : {}", ex.getClass().getSimpleName());
+		return error(HttpStatus.CONFLICT,
+				"Ces données sont en cours de modification par une autre requête : réessayez dans quelques instants");
+	}
+
+	/**
+	 * Deux modifications simultanées de la même ligne : la seconde écriture est refusée par le
+	 * {@code @Version} de l'entité.
+	 *
+	 * @param ex conflit détecté par Hibernate à l'écriture
+	 * @return 409 avec le même message qu'une version périmée envoyée par le client
+	 */
+	@ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+	public ResponseEntity<ApiResponse<Void>> handleOptimisticLocking(ObjectOptimisticLockingFailureException ex) {
+		return error(HttpStatus.CONFLICT, ModificationConcurrenteException.MESSAGE);
+	}
+
+	/**
 	 * Filet de sécurité : toute exception imprévue renvoie 500 sans exposer son détail au client.
+	 *
+	 * @param ex exception imprévue
+	 * @return 500 avec un message générique
 	 */
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex) {
@@ -56,16 +114,45 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 				.sorted(Comparator.comparing(FieldError::getField))
 				.map(e -> e.getField() + " : " + e.getDefaultMessage())
 				.collect(Collectors.joining(" ; "));
-		return handleExceptionInternal(ex, ProblemDetail.forStatusAndDetail(status, "Requête invalide : " + details),
-				headers, status, request);
+		return detail(ex, "Requête invalide : " + details, headers, status, request);
 	}
 
 	/** Corps de requête absent ou JSON mal formé : message en français plutôt que le détail technique. */
 	@Override
 	protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
 			HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-		return handleExceptionInternal(ex, ProblemDetail.forStatusAndDetail(status, "Corps de requête JSON invalide"),
-				headers, status, request);
+		return detail(ex, "Corps de requête JSON invalide", headers, status, request);
+	}
+
+	/** Paramètre d'URL ou de chemin au mauvais format (ex. {@code /api/projets/abc}). */
+	@Override
+	protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex, HttpHeaders headers,
+			HttpStatusCode status, WebRequest request) {
+		return detail(ex, "Paramètre invalide : '" + ex.getPropertyName() + "' n'a pas le format attendu", headers,
+				status, request);
+	}
+
+	/** Méthode HTTP non prévue pour l'URL ; l'en-tête {@code Allow} liste les méthodes possibles. */
+	@Override
+	protected ResponseEntity<Object> handleHttpRequestMethodNotSupported(HttpRequestMethodNotSupportedException ex,
+			HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+		return detail(ex, "La méthode " + ex.getMethod() + " n'est pas autorisée sur cette URL", headers, status,
+				request);
+	}
+
+	/** Corps envoyé dans un autre format que JSON. */
+	@Override
+	protected ResponseEntity<Object> handleHttpMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex,
+			HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+		return detail(ex, "Type de contenu non supporté : le corps doit être envoyé en application/json", headers,
+				status, request);
+	}
+
+	/** URL ne correspondant à aucun endpoint. */
+	@Override
+	protected ResponseEntity<Object> handleNoResourceFoundException(NoResourceFoundException ex, HttpHeaders headers,
+			HttpStatusCode status, WebRequest request) {
+		return detail(ex, "URL inconnue : /" + ex.getResourcePath(), headers, status, request);
 	}
 
 	/** Point de passage de toutes les exceptions Spring MVC : remplace le ProblemDetail par une ApiResponse. */
@@ -74,6 +161,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 			WebRequest request) {
 		String message = body instanceof ProblemDetail problem ? problem.getDetail() : null;
 		return new ResponseEntity<>(ApiResponse.error(message), headers, statusCode);
+	}
+
+	private ResponseEntity<Object> detail(Exception ex, String message, HttpHeaders headers, HttpStatusCode status,
+			WebRequest request) {
+		return handleExceptionInternal(ex, ProblemDetail.forStatusAndDetail(status, message), headers, status, request);
+	}
+
+	/** Nom de la contrainte enfreinte, extrait par Hibernate ; "inconnue" s'il n'est pas disponible. */
+	private static String nomContrainte(DataIntegrityViolationException ex) {
+		if (ex.getCause() instanceof ConstraintViolationException violation && violation.getConstraintName() != null) {
+			return violation.getConstraintName();
+		}
+		return "inconnue";
 	}
 
 	private static ResponseEntity<ApiResponse<Void>> error(HttpStatus status, String message) {

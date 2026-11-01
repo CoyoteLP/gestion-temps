@@ -94,6 +94,25 @@ datée d'aujourd'hui ; en modification (`PUT`), un `jour` absent conserve la dat
 Supprimer une ressource encore référencée (projet avec tâches, tâche ou utilisateur avec
 saisies) renvoie 409 : il faut alors la désactiver (`actif: false`).
 
+### Modification et accès concurrents
+
+Chaque ressource renvoyée porte un champ `version`. Une modification (`PUT`) doit renvoyer la
+`version` lue : sans elle, la requête est refusée (400) ; si la ressource a été modifiée entre-temps
+par quelqu'un d'autre, elle est refusée (409) et il faut la recharger avant de réessayer. En
+création (`POST`), `version` est ignorée.
+
+```json
+PUT /api/saisies-temps/12
+{ "version": 0, "utilisateurId": 1, "tacheId": 3, "duree": 7 }
+```
+
+La réponse renvoie la nouvelle `version` (ici 1).
+
+Les saisies d'un même utilisateur sont enregistrées l'une après l'autre, pour que le total de 24 h
+par jour soit respecté même en cas de requêtes simultanées. Si une saisie attend plus de 5 secondes
+qu'une autre se termine, elle est refusée (409) et peut être renvoyée. La date du jour (saisie sans `jour`) est celle
+de Paris (Europe/Paris), quel que soit le fuseau du serveur.
+
 Le total des saisies d'un utilisateur sur une même journée ne peut pas dépasser 24 h :
 une création ou modification qui le dépasserait renvoie 422. De même, saisir du temps pour
 un utilisateur désactivé, sur une tâche désactivée ou sur une tâche d'un projet désactivé

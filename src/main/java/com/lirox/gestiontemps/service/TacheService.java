@@ -9,6 +9,7 @@ import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.domain.Tache;
 import com.lirox.gestiontemps.dto.TacheRequest;
 import com.lirox.gestiontemps.dto.TacheResponse;
+import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.exception.ResourceInUseException;
 import com.lirox.gestiontemps.exception.ResourceNotFoundException;
 import com.lirox.gestiontemps.repository.ProjetRepository;
@@ -65,11 +66,14 @@ public class TacheService {
 	 * @param request nouvelles données
 	 * @return la tâche modifiée
 	 * @throws ResourceNotFoundException si la tâche ou le projet n'existe pas
+	 * @throws ModificationConcurrenteException si la version envoyée n'est plus celle en base
 	 */
 	@Transactional
 	public TacheResponse update(Long id, TacheRequest request) {
 		Tache tache = getTache(id);
+		VerrouOptimiste.verifier(tache.getVersion(), request.version());
 		apply(request, tache);
+		tacheRepository.flush();
 		return TacheResponse.from(tache);
 	}
 
