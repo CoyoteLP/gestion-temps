@@ -1,4 +1,4 @@
-# Profil de développement : MariaDB locale, schéma mis à jour automatiquement.
+# Profil de développement : MariaDB locale, schéma créé par les migrations Flyway.
 # Les informations de connexion ne sont pas versionnées : elles sont lues dans le fichier .env à la
 # racine du projet (copie de .env.example, ignorée par Git) ou dans les variables d'environnement,
 # qui restent prioritaires.
@@ -10,6 +10,4 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
   jpa:
-    hibernate:
-      ddl-auto: update
     show-sql: true

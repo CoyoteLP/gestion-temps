@@ -5,6 +5,10 @@ spring:
     default: dev
   jpa:
     open-in-view: false
+    # Le schéma est créé et modifié uniquement par Flyway (src/main/resources/db/migration) ;
+    # Hibernate vérifie au démarrage que les entités correspondent, dans tous les profils.
+    hibernate:
+      ddl-auto: validate
 
 server:
   port: 8080

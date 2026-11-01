@@ -181,8 +181,14 @@ Messages d'erreur en français, compréhensibles par un utilisateur final.
 
 ## Base de données
 
-- Le profil `prod` utilise `ddl-auto: validate` : toute nouvelle entité ou colonne exige un script
-  de migration du schéma de production, à signaler dans la PR.
+- Le schéma est géré **uniquement par Flyway** (`src/main/resources/db/migration`), appliqué au
+  démarrage dans tous les profils ; Hibernate est en `ddl-auto: validate` partout et refuse de
+  démarrer si une entité ne correspond pas au schéma.
+- Toute nouvelle entité, colonne, contrainte ou index exige un nouveau script
+  `V<n>__description_en_snake_case.sql`, ajouté dans la même PR que l'entité et signalé dans sa
+  description. Un script déjà fusionné n'est **jamais** modifié.
+- Dans les scripts : SQL compatible MariaDB 11.4, tables `engine=InnoDB default charset=utf8mb4`,
+  contraintes nommées `uk_<table>_<colonne>`, `fk_<table>_<cible>`, index `idx_<table>_<colonnes>`.
 - `open-in-view` est désactivé : convertir les entités en DTO dans la transaction du service.
 - Informations de connexion jamais versionnées : `application-*.yml` ne contient que des
   placeholders sans valeur par défaut (`${DB_PASSWORD}`). En dev, les valeurs sont dans `.env`
@@ -257,6 +263,7 @@ Changement incompatible de l'API : `!` après le type (`feat(api)!: …`).
   (`LoggerFactory.getLogger(...)`).
 - Nombres magiques en dur : les déclarer dans `Constantes` (voir « Constantes »).
 - SQL natif ou requêtes concaténées : utiliser les méthodes du repository (voir « Repositories »).
+  Les scripts de migration Flyway (DDL) ne sont pas concernés : c'est le seul endroit où du SQL est écrit.
 - Appeler un repository depuis un contrôleur : toujours passer par le service.
 - Lever une `RuntimeException` brute : utiliser une sous-classe d'`ApplicationException`.
 - Exposer une entité JPA dans une réponse : passer par un DTO.

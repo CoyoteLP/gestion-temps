@@ -1,9 +1,7 @@
 # Profil de test : MariaDB dans un conteneur Docker démarré par Testcontainers (URL jdbc:tc:),
 # partagé par toute la suite ; Docker doit être lancé. Aucune MariaDB locale ni .env requis.
+# Le schéma est créé par les migrations Flyway, comme en production.
 spring:
   datasource:
     url: jdbc:tc:mariadb:11.4:///gestion_temps
     driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
-  jpa:
-    hibernate:
-      ddl-auto: create-drop

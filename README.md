@@ -31,6 +31,12 @@ DB_USERNAME et DB_PASSWORD dans .env. […]
 
 En profil `prod`, le même contrôle liste les variables d'environnement manquantes.
 
+Le schéma de la base est créé et mis à jour au démarrage par les migrations Flyway
+(`src/main/resources/db/migration`), dans tous les profils. Une base de développement créée avant
+leur mise en place (schéma généré par Hibernate, sans table `flyway_schema_history`) doit être
+recréée une fois : `DROP DATABASE gestion_temps;` puis relancer l'application (les données de
+développement sont perdues).
+
 - API : http://localhost:8080
 - Santé : http://localhost:8080/actuator/health
 
