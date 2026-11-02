@@ -25,7 +25,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-public class SaisieTemps {
+public class SaisieTemps extends EntiteAuditee {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)

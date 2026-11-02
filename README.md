@@ -191,6 +191,15 @@ Toutes les réponses (succès comme erreurs) utilisent la même enveloppe, le co
 { "status": "error", "data": null, "message": "Projet introuvable (id=9999)" }
 ```
 
+Chaque ressource renvoyée porte un objet `audit` en lecture seule : date et auteur de la création
+et de la dernière modification (instants UTC ; auteur = email du jeton, ou identifiant du compte
+à défaut, null pour les données antérieures à l'audit).
+
+```json
+"audit": { "creeLe": "2026-11-02T08:30:00Z", "creePar": "jdupont@lirox.test",
+           "modifieLe": "2026-11-02T09:10:00Z", "modifiePar": "pmartin@lirox.test" }
+```
+
 Une suppression renvoie 200 avec `data: null` et un message de confirmation. Une erreur de
 validation (400) liste les champs en cause dans `message`, par exemple
 `"Requête invalide : code : ne doit pas être vide ; nom : ne doit pas être vide"`.

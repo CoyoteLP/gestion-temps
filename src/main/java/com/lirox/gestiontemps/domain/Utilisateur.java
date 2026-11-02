@@ -1,7 +1,5 @@
 package com.lirox.gestiontemps.domain;
 
-import org.hibernate.annotations.OptimisticLock;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -21,7 +19,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-public class Utilisateur {
+public class Utilisateur extends EntiteAuditee {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -45,11 +43,10 @@ public class Utilisateur {
 	/**
 	 * Identifiant du compte chez le fournisseur OIDC (revendication {@code sub} du jeton), renseigné
 	 * à la première connexion par rapprochement de l'email ; null tant que l'utilisateur ne s'est
-	 * jamais connecté. Exclu du verrouillage optimiste : le rattachement n'est pas une modification
-	 * de la fiche et ne doit pas périmer la version qu'un administrateur vient de lire.
+	 * jamais connecté. Renseigné uniquement par {@code UtilisateurRepository.rattacherSujet}, sans
+	 * changer la version ni l'audit de la fiche.
 	 */
 	@Column(unique = true, length = 255)
-	@OptimisticLock(excluded = true)
 	private String sujet;
 
 	/** Un utilisateur désactivé ne peut plus saisir de nouveau temps. */

@@ -15,6 +15,7 @@ import com.lirox.gestiontemps.domain.Projet;
  * @param dateDebut   date de début prévue
  * @param dateFin     date de fin prévue
  * @param actif       false si le projet est désactivé
+ * @param audit       date et auteur de la création et de la dernière modification
  */
 public record ProjetResponse(
 		Long id,
@@ -24,15 +25,17 @@ public record ProjetResponse(
 		String description,
 		LocalDate dateDebut,
 		LocalDate dateFin,
-		boolean actif) {
+		boolean actif,
+		AuditResponse audit) {
 
 	/**
 	 * @param projet entité à convertir
 	 * @return la représentation API du projet
 	 */
 	public static ProjetResponse from(Projet projet) {
-		return new ProjetResponse(projet.getId(), projet.getVersion(), projet.getCode(), projet.getNom(), projet.getDescription(),
-				projet.getDateDebut(), projet.getDateFin(), projet.isActif());
+		return new ProjetResponse(projet.getId(), projet.getVersion(), projet.getCode(), projet.getNom(),
+				projet.getDescription(), projet.getDateDebut(), projet.getDateFin(), projet.isActif(),
+				AuditResponse.from(projet));
 	}
 
 }
