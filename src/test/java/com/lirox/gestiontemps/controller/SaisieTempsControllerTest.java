@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneId;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.jayway.jsonpath.JsonPath;
 import com.lirox.gestiontemps.JetonsDeTest;
+import com.lirox.gestiontemps.domain.Cloture;
 import com.lirox.gestiontemps.domain.MembreProjet;
 import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.domain.RoleProjet;
@@ -45,6 +47,7 @@ import com.lirox.gestiontemps.domain.SaisieTemps;
 import com.lirox.gestiontemps.domain.Tache;
 import com.lirox.gestiontemps.domain.Utilisateur;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
+import com.lirox.gestiontemps.repository.ClotureRepository;
 import com.lirox.gestiontemps.repository.MembreProjetRepository;
 import com.lirox.gestiontemps.repository.ProjetRepository;
 import com.lirox.gestiontemps.repository.SaisieTempsRepository;
@@ -92,6 +95,9 @@ class SaisieTempsControllerTest {
 
 	@Autowired
 	private MembreProjetRepository membreProjetRepository;
+
+	@Autowired
+	private ClotureRepository clotureRepository;
 
 	private Utilisateur utilisateur;
 
@@ -494,6 +500,127 @@ class SaisieTempsControllerTest {
 				.andExpect(status().isConflict());
 	}
 
+	// Période du projet : jour compris entre dateDebut et dateFin (bornes incluses, nulles = ouvertes)
+
+	@ParameterizedTest
+	@ValueSource(strings = { "2026-01-01", "2026-03-15", "2026-06-30" })
+	void createAccepteUnJourDansLaPeriodeDuProjet(String jour) throws Exception {
+		periodeDuProjet(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 6, 30));
+		mockMvc.perform(post("/api/saisies-temps").contentType(MediaType.APPLICATION_JSON).content("""
+				{"utilisateurId": %d, "tacheId": %d, "jour": "%s", "duree": 2}
+				""".formatted(utilisateur.getId(), tache.getId(), jour)))
+				.andExpect(status().isCreated());
+	}
+
+	@ParameterizedTest
+	@CsvSource(delimiter = '|', value = {
+			"2025-12-31 | 2026-01-01 | 2026-06-30 | du 2026-01-01 au 2026-06-30",
+			"2026-07-01 | 2026-01-01 | 2026-06-30 | du 2026-01-01 au 2026-06-30",
+			"2025-12-31 | 2026-01-01 |            | à partir du 2026-01-01",
+			"2026-07-01 |            | 2026-06-30 | jusqu'au 2026-06-30" })
+	void createRefuseUnJourHorsDeLaPeriodeDuProjet(String jour, LocalDate debut, LocalDate fin, String periode)
+			throws Exception {
+		periodeDuProjet(debut, fin);
+		mockMvc.perform(post("/api/saisies-temps").contentType(MediaType.APPLICATION_JSON).content("""
+				{"utilisateurId": %d, "tacheId": %d, "jour": "%s", "duree": 2}
+				""".formatted(utilisateur.getId(), tache.getId(), jour)))
+				.andExpect(status().isUnprocessableContent())
+				.andExpect(jsonPath("$.message")
+						.value("Le " + jour + " est hors de la période du projet PRJ-01 (" + periode + ")"));
+		assertThat(saisieTempsRepository.count()).isZero();
+	}
+
+	@Test
+	void updateRefuseDeDeplacerUneSaisieHorsDeLaPeriode() throws Exception {
+		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 6, 1));
+		periodeDuProjet(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 6, 30));
+		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "jour": "2026-07-01", "duree": 2}
+						""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isUnprocessableContent());
+	}
+
+	@Test
+	void updateAutoriseLaCorrectionDUneSaisieDevenueHorsPeriode() throws Exception {
+		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 6, 1));
+		periodeDuProjet(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 5, 31));
+		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "duree": 5}
+						""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.duree").value(5));
+	}
+
+	// Mois clôturé : aucune saisie de ce mois ne peut être créée, modifiée, déplacée ni supprimée
+
+	@Test
+	void createRefuseUneSaisieDansUnMoisCloture() throws Exception {
+		cloturer(tache.getProjet(), YearMonth.of(2026, 5));
+		mockMvc.perform(post("/api/saisies-temps").contentType(MediaType.APPLICATION_JSON).content("""
+				{"utilisateurId": %d, "tacheId": %d, "jour": "2026-05-31", "duree": 2}
+				""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isUnprocessableContent())
+				.andExpect(jsonPath("$.message").value("Le mois 2026-05 est clôturé pour le projet PRJ-01 : "
+						+ "ses saisies ne peuvent plus être créées, modifiées ni supprimées"));
+		assertThat(saisieTempsRepository.count()).isZero();
+	}
+
+	@Test
+	void createAccepteUnAutreMoisOuUnAutreProjet() throws Exception {
+		cloturer(tache.getProjet(), YearMonth.of(2026, 5));
+		Tache autreProjet = saveTache("PRJ-02");
+		mockMvc.perform(post("/api/saisies-temps").contentType(MediaType.APPLICATION_JSON).content("""
+				{"utilisateurId": %d, "tacheId": %d, "jour": "2026-06-01", "duree": 2}
+				""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isCreated());
+		mockMvc.perform(post("/api/saisies-temps").contentType(MediaType.APPLICATION_JSON).content("""
+				{"utilisateurId": %d, "tacheId": %d, "jour": "2026-05-31", "duree": 2}
+				""".formatted(utilisateur.getId(), autreProjet.getId())))
+				.andExpect(status().isCreated());
+	}
+
+	@Test
+	void uneSaisieDUnMoisClotureNePeutNiEtreModifieeNiDeplaceeNiSupprimee() throws Exception {
+		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 5, 20));
+		cloturer(tache.getProjet(), YearMonth.of(2026, 5));
+		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "duree": 5}
+						""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isUnprocessableContent());
+		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "jour": "2026-06-02", "duree": 2}
+						""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isUnprocessableContent());
+		mockMvc.perform(delete("/api/saisies-temps/{id}", saisie.getId()))
+				.andExpect(status().isUnprocessableContent());
+		assertThat(saisieTempsRepository.existsById(saisie.getId())).isTrue();
+	}
+
+	@Test
+	void updateRefuseDeDeplacerUneSaisieVersUnMoisCloture() throws Exception {
+		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 6, 2));
+		cloturer(tache.getProjet(), YearMonth.of(2026, 5));
+		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "jour": "2026-05-29", "duree": 2}
+						""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isUnprocessableContent());
+	}
+
+	@Test
+	void unMoisRouvertRedevientModifiable() throws Exception {
+		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 5, 20));
+		Cloture cloture = cloturer(tache.getProjet(), YearMonth.of(2026, 5));
+		mockMvc.perform(delete("/api/clotures/{id}", cloture.getId()))
+				.andExpect(status().isOk());
+		mockMvc.perform(delete("/api/saisies-temps/{id}", saisie.getId()))
+				.andExpect(status().isOk());
+	}
+
 	// Audit : date (horloge fixe) et auteur (email du jeton, ou sub à défaut)
 
 	@Test
@@ -663,6 +790,18 @@ class SaisieTempsControllerTest {
 				""".formatted(tache.getId())))
 				.andExpect(status().isForbidden());
 		assertThat(saisieTempsRepository.count()).isZero();
+	}
+
+	private void periodeDuProjet(LocalDate debut, LocalDate fin) {
+		tache.getProjet().setDateDebut(debut);
+		tache.getProjet().setDateFin(fin);
+	}
+
+	private Cloture cloturer(Projet p, YearMonth mois) {
+		Cloture cloture = new Cloture();
+		cloture.setProjet(p);
+		cloture.setMois(mois.atDay(1));
+		return clotureRepository.save(cloture);
 	}
 
 	/** Utilisateur dont le compte OIDC est déjà rattaché (sujet renseigné). */

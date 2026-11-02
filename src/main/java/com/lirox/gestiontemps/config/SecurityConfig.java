@@ -27,8 +27,9 @@ import com.lirox.gestiontemps.common.Constantes;
  * Sécurité de l'API : jetons JWT émis par le fournisseur OIDC
  * ({@code spring.security.oauth2.resourceserver.jwt.issuer-uri}), sans session ni cookie.
  * <ul>
- * <li>tout utilisateur authentifié peut lire ({@code GET}) et gérer ses saisies de temps ; les
- * règles fines (ses propres saisies, membres d'un projet) sont appliquées par les services ;</li>
+ * <li>tout utilisateur authentifié peut lire ({@code GET}), gérer ses saisies de temps et demander
+ * une clôture ; les règles fines (ses propres saisies, membres d'un projet) sont appliquées par les
+ * services ;</li>
  * <li>les autres écritures (projets, tâches, utilisateurs, membres) sont réservées au rôle
  * {@link Constantes#ROLE_ADMIN} ;</li>
  * <li>401 et 403 sont renvoyés dans l'enveloppe {@code ApiResponse} par le
@@ -63,6 +64,7 @@ public class SecurityConfig {
 						.requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/**").authenticated()
 						.requestMatchers("/api/saisies-temps", "/api/saisies-temps/**").authenticated()
+						.requestMatchers(HttpMethod.POST, "/api/clotures", "/api/clotures/tous-projets").authenticated()
 						.requestMatchers("/api/**").hasRole(Constantes.ROLE_ADMIN)
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(serveur -> serveur

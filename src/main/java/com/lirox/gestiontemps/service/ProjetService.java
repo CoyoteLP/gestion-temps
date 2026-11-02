@@ -12,6 +12,7 @@ import com.lirox.gestiontemps.exception.DuplicateResourceException;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.exception.ResourceInUseException;
 import com.lirox.gestiontemps.exception.ResourceNotFoundException;
+import com.lirox.gestiontemps.repository.ClotureRepository;
 import com.lirox.gestiontemps.repository.MembreProjetRepository;
 import com.lirox.gestiontemps.repository.ProjetRepository;
 import com.lirox.gestiontemps.repository.TacheRepository;
@@ -29,6 +30,7 @@ public class ProjetService {
 	private final ProjetRepository projetRepository;
 	private final TacheRepository tacheRepository;
 	private final MembreProjetRepository membreProjetRepository;
+	private final ClotureRepository clotureRepository;
 
 	/**
 	 * @return tous les projets
@@ -85,7 +87,7 @@ public class ProjetService {
 	 * @param id identifiant du projet à supprimer
 	 * @throws ResourceNotFoundException si le projet n'existe pas
 	 * @throws ResourceInUseException    si le projet possède des tâches (le désactiver à la place) ;
-	 *                                   ses membres sont retirés avec lui
+	 *                                   ses membres et clôtures sont retirés avec lui
 	 */
 	@Transactional
 	public void delete(Long id) {
@@ -94,7 +96,38 @@ public class ProjetService {
 			throw new ResourceInUseException("Le projet possède des tâches : désactivez-le plutôt");
 		}
 		membreProjetRepository.deleteByProjetId(id);
+		clotureRepository.deleteByProjetId(id);
 		projetRepository.delete(projet);
+	}
+
+	/**
+	 * Pose un verrou partagé sur le projet jusqu'à la fin de la transaction (écriture d'une saisie) :
+	 * une clôture du projet attend la fin de la transaction.
+	 *
+	 * @param id identifiant du projet
+	 * @throws ResourceNotFoundException si le projet n'existe pas
+	 */
+	void verrouillerEnLecture(Long id) {
+		projetRepository.findPartageById(id).orElseThrow(() -> new ResourceNotFoundException("Projet", id));
+	}
+
+	/**
+	 * Charge le projet en le verrouillant en écriture jusqu'à la fin de la transaction (clôture) :
+	 * attend la fin des écritures de saisies en cours sur le projet.
+	 *
+	 * @param id identifiant du projet
+	 * @return l'entité projet, verrouillée
+	 * @throws ResourceNotFoundException si le projet n'existe pas
+	 */
+	Projet getProjetVerrouille(Long id) {
+		return projetRepository.findVerrouilleById(id).orElseThrow(() -> new ResourceNotFoundException("Projet", id));
+	}
+
+	/**
+	 * @return les projets actifs, verrouillés en écriture dans l'ordre de leurs identifiants
+	 */
+	List<Projet> verrouillerProjetsActifs() {
+		return projetRepository.findActifsVerrouilles();
 	}
 
 	/**
