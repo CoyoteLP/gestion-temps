@@ -34,6 +34,12 @@ public final class Constantes {
 	public static final String DELAI_VERROU_UTILISATEUR_MS = "5000";
 
 	/**
+	 * Attente maximale du verrou posé sur un projet (saisie contre clôture du mois), en millisecondes
+	 * (texte : utilisable dans {@code @QueryHint}) ; au-delà, la requête est refusée.
+	 */
+	public static final String DELAI_VERROU_PROJET_MS = "5000";
+
+	/**
 	 * Valeur de la revendication des rôles du jeton qui donne les droits d'administration (gestion
 	 * des projets, tâches, utilisateurs et membres, accès à toutes les saisies). Sans elle, l'appelant
 	 * est un collaborateur.

@@ -83,6 +83,7 @@ Les ressources `utilisateurs`, `taches` et `saisies-temps` exposent les mêmes o
 | /api/taches              | `projetId`                                   |
 | /api/saisies-temps       | `utilisateurId`, `projetId`, `tacheId`, `du`, `au` (dates) |
 | /api/projets/{projetId}/membres | –                                     |
+| /api/clotures            | `projetId`, `mois` (AAAA-MM)                 |
 
 Pour saisir des heures : `POST /api/saisies-temps` avec `tacheId` (une tâche du projet),
 éventuellement `utilisateurId` (par défaut l'utilisateur connecté), `duree` en heures (de 0,5 à 24, par pas de 0,5 : 1, 1.5, 7.5…), et éventuellement `jour`
@@ -120,6 +121,21 @@ une création ou modification qui le dépasserait renvoie 422. De même, saisir 
 un utilisateur désactivé, sur une tâche désactivée ou sur une tâche d'un projet désactivé
 renvoie 422. Ce contrôle ne s'applique qu'à la création ou au changement d'utilisateur/de
 tâche : une saisie existante reste corrigeable (durée, jour, commentaire) après une désactivation.
+
+Le jour d'une saisie doit être compris dans la période du projet (`dateDebut` à `dateFin`, bornes
+incluses ; une borne absente ne limite pas) : sinon 422. Comme pour les désactivations, la règle ne
+s'applique qu'à une saisie nouvelle ou déplacée (autre jour ou autre tâche).
+
+### Clôture mensuelle
+
+Un mois **terminé** peut être clôturé pour un projet (`POST /api/clotures` avec `projetId` et `mois`,
+ex. `"2026-10"`) par un administrateur ou un membre du projet (MANAGER, BACKUP). Un administrateur
+peut clôturer d'un coup tous les projets actifs qui ne le sont pas encore
+(`POST /api/clotures/tous-projets` avec `mois`, 201 avec la liste des clôtures créées). Ensuite, les
+saisies de ce mois sur ce projet ne peuvent plus être créées, modifiées, déplacées (vers ou depuis ce
+mois) ni supprimées, administrateur compris (422). Seul un administrateur peut rouvrir le mois
+(`DELETE /api/clotures/{id}`). Le mois en cours ou à venir ne peut pas être clôturé (422), un mois
+déjà clôturé renvoie 409.
 
 ## Authentification et droits
 

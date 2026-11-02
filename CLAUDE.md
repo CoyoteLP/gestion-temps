@@ -141,6 +141,8 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - Retournent toujours une `ApiResponse<T>` (voir ci-dessous) ; `@Valid @RequestBody` sur les entrées,
   `@Validated({ Default.class, Modification.class }) @RequestBody` sur les `PUT`.
 - `POST` → 201 + en-tête `Location` ; `DELETE` → 200 avec `data: null` et un message de confirmation.
+  Exception : un `POST` qui crée plusieurs ressources d'un coup renvoie 201 avec leur liste (éventuellement
+  vide) et un message, sans `Location` (voir `POST /api/clotures/tous-projets`).
 - Les filtres de liste sont des `@RequestParam(required = false)`.
 
 ## Sécurité
@@ -203,6 +205,13 @@ Messages d'erreur en français, compréhensibles par un utilisateur final.
 - Le total des saisies d'un utilisateur sur une journée ne dépasse pas `Constantes.MAX_HEURES_JOUR` (24 h).
 - Pas de nouvelle saisie pour un utilisateur, une tâche ou un projet désactivé ; une saisie
   existante reste corrigeable tant qu'on ne change ni l'utilisateur ni la tâche.
+- Le jour d'une saisie nouvelle ou déplacée (autre jour ou autre tâche) est compris dans la période
+  du projet (`dateDebut`, `dateFin`, bornes incluses, nulles = ouvertes).
+- Un mois clôturé pour un projet (`Cloture`) interdit de créer, modifier, déplacer (vers ou depuis
+  ce mois) ou supprimer ses saisies, administrateur compris. Seul un mois terminé se clôture, par un
+  administrateur ou un membre du projet ; seul un administrateur le rouvre. Chaque écriture de saisie
+  verrouille le projet en lecture et une clôture le verrouille en écriture (`ProjetRepository`) :
+  une saisie ne peut pas s'intercaler pendant une clôture.
 
 ## Tests
 

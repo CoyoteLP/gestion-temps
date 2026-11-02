@@ -117,7 +117,11 @@ class SecurityConfigTest {
 			"GET,    /api/projets/1/membres/1",
 			"POST,   /api/projets/1/membres",
 			"PUT,    /api/projets/1/membres/1",
-			"DELETE, /api/projets/1/membres/1" })
+			"DELETE, /api/projets/1/membres/1",
+			"GET,    /api/clotures",
+			"POST,   /api/clotures",
+			"POST,   /api/clotures/tous-projets",
+			"DELETE, /api/clotures/1" })
 	void toutesLesRessourcesExigentUnJeton(String methode, String url) throws Exception {
 		mockMvc.perform(request(HttpMethod.valueOf(methode), url).contentType(MediaType.APPLICATION_JSON).content("{}"))
 				.andExpect(status().isUnauthorized())
@@ -198,7 +202,8 @@ class SecurityConfigTest {
 			"DELETE, /api/utilisateurs/1",
 			"POST,   /api/projets/1/membres",
 			"PUT,    /api/projets/1/membres/1",
-			"DELETE, /api/projets/1/membres/1" })
+			"DELETE, /api/projets/1/membres/1",
+			"DELETE, /api/clotures/1" })
 	void lesAutresEcrituresSontReserveesAuxAdministrateurs(String methode, String url) throws Exception {
 		mockMvc.perform(request(HttpMethod.valueOf(methode), url).with(jwt())
 				.contentType(MediaType.APPLICATION_JSON).content("{}"))
@@ -269,7 +274,8 @@ class SecurityConfigTest {
 	}
 
 	private static String signer(RSAKey cle, JWTClaimsSet revendications) throws JOSEException {
-		SignedJWT jeton = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(cle.getKeyID()).build(), revendications);
+		JWSHeader entete = new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(cle.getKeyID()).build();
+		SignedJWT jeton = new SignedJWT(entete, revendications);
 		jeton.sign(new RSASSASigner(cle));
 		return jeton.serialize();
 	}

@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.lirox.gestiontemps.common.Constantes;
+import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.domain.SaisieTemps;
 import com.lirox.gestiontemps.domain.Tache;
 import com.lirox.gestiontemps.domain.Utilisateur;
@@ -25,7 +26,8 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * Gestion des saisies de temps et des règles qui les encadrent : utilisateur, tâche et projet
- * actifs, total journalier limité à {@link Constantes#MAX_HEURES_JOUR} heures, et droits d'accès.
+ * actifs, jour dans la période du projet, mois non clôturé, total journalier limité à
+ * {@link Constantes#MAX_HEURES_JOUR} heures, et droits d'accès.
  * <p>
  * Droits : un administrateur accède à toutes les saisies ; un collaborateur crée, modifie et
  * supprime ses propres saisies, et consulte en plus celles des projets dont il est membre.
@@ -45,6 +47,7 @@ public class SaisieTempsService {
 	private final UtilisateurService utilisateurService;
 	private final TacheService tacheService;
 	private final MembreProjetService membreProjetService;
+	private final ClotureService clotureService;
 	private final UtilisateurCourantService utilisateurCourantService;
 	private final Clock clock;
 
@@ -147,11 +150,13 @@ public class SaisieTempsService {
 	 * @param id identifiant de la saisie à supprimer
 	 * @throws ResourceNotFoundException si la saisie n'existe pas
 	 * @throws AccesRefuseException      si un collaborateur supprime la saisie d'un autre
+	 * @throws BusinessRuleException     si le mois de la saisie est clôturé pour son projet
 	 */
 	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public void delete(Long id) {
 		SaisieTemps saisie = getSaisie(id);
 		verifierAuteur(saisie, "Vous ne pouvez supprimer que vos propres saisies");
+		clotureService.verifierNonCloture(saisie.getTache().getProjet(), saisie.getJour());
 		saisieTempsRepository.delete(saisie);
 	}
 
@@ -184,17 +189,39 @@ public class SaisieTempsService {
 	}
 
 	/**
-	 * Les contrôles d'activité ne portent que sur une nouvelle affectation (création, ou changement
-	 * d'utilisateur/de tâche) : une saisie existante reste corrigeable après une désactivation.
+	 * Applique la requête après contrôle des règles, dans cet ordre : affectation (ressources actives),
+	 * clôture (mois de départ et d'arrivée), période du projet, total journalier.
 	 * {@code utilisateur} a été verrouillé par l'appelant (voir la Javadoc de la classe).
 	 */
 	private void apply(SaisieTempsRequest request, SaisieTemps saisie, Utilisateur utilisateur) {
+		Tache tache = tacheService.getTache(request.tacheId());
+		LocalDate jour = resoudreJour(request, saisie);
+		verifierAffectation(saisie, utilisateur, tache);
+		if (saisie.getId() == null) {
+			clotureService.verifierNonCloture(tache.getProjet(), jour);
+		}
+		else {
+			clotureService.verifierNonCloture(saisie.getTache().getProjet(), saisie.getJour(), tache.getProjet(), jour);
+		}
+		verifierPeriodeProjet(saisie, tache, jour);
+		verifierTotalJournee(utilisateur, request.duree(), jour, saisie.getId());
+		saisie.setUtilisateur(utilisateur);
+		saisie.setTache(tache);
+		saisie.setJour(jour);
+		saisie.setDuree(request.duree());
+		saisie.setCommentaire(request.commentaire());
+	}
+
+	/**
+	 * Les contrôles d'activité ne portent que sur une nouvelle affectation (création, ou changement
+	 * d'utilisateur/de tâche) : une saisie existante reste corrigeable après une désactivation.
+	 */
+	private static void verifierAffectation(SaisieTemps saisie, Utilisateur utilisateur, Tache tache) {
 		boolean utilisateurChange = saisie.getUtilisateur() == null
 				|| !saisie.getUtilisateur().getId().equals(utilisateur.getId());
 		if (utilisateurChange && !utilisateur.isActif()) {
 			throw new BusinessRuleException("Impossible de saisir du temps pour un utilisateur désactivé");
 		}
-		Tache tache = tacheService.getTache(request.tacheId());
 		boolean tacheChange = saisie.getTache() == null || !saisie.getTache().getId().equals(tache.getId());
 		if (tacheChange && !tache.isActif()) {
 			throw new BusinessRuleException("Impossible de saisir du temps sur une tâche désactivée");
@@ -202,13 +229,33 @@ public class SaisieTempsService {
 		if (tacheChange && !tache.getProjet().isActif()) {
 			throw new BusinessRuleException("Impossible de saisir du temps sur une tâche d'un projet désactivé");
 		}
-		LocalDate jour = resoudreJour(request, saisie);
-		verifierTotalJournee(utilisateur, request.duree(), jour, saisie.getId());
-		saisie.setUtilisateur(utilisateur);
-		saisie.setTache(tache);
-		saisie.setJour(jour);
-		saisie.setDuree(request.duree());
-		saisie.setCommentaire(request.commentaire());
+	}
+
+	/**
+	 * Le jour doit être compris dans la période du projet (bornes nulles = ouvertes). Comme les
+	 * contrôles d'activité, la règle ne porte que sur une saisie nouvelle ou déplacée (autre jour ou
+	 * autre tâche) : une saisie existante reste corrigeable si les dates du projet changent ensuite.
+	 */
+	private static void verifierPeriodeProjet(SaisieTemps saisie, Tache tache, LocalDate jour) {
+		boolean deplacee = saisie.getId() == null || !jour.equals(saisie.getJour())
+				|| !saisie.getTache().getId().equals(tache.getId());
+		Projet projet = tache.getProjet();
+		boolean avantDebut = projet.getDateDebut() != null && jour.isBefore(projet.getDateDebut());
+		boolean apresFin = projet.getDateFin() != null && jour.isAfter(projet.getDateFin());
+		if (deplacee && (avantDebut || apresFin)) {
+			throw new BusinessRuleException("Le " + jour + " est hors de la période du projet " + projet.getCode()
+					+ " (" + periode(projet) + ")");
+		}
+	}
+
+	private static String periode(Projet projet) {
+		if (projet.getDateDebut() == null) {
+			return "jusqu'au " + projet.getDateFin();
+		}
+		if (projet.getDateFin() == null) {
+			return "à partir du " + projet.getDateDebut();
+		}
+		return "du " + projet.getDateDebut() + " au " + projet.getDateFin();
 	}
 
 	/** Jour fourni, sinon date inchangée (modification) ou date du jour (création). */
