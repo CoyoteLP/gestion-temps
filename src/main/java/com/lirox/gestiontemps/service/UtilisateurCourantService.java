@@ -73,8 +73,10 @@ public class UtilisateurCourantService {
 			// Email déjà rattaché à un autre compte du fournisseur : refuser plutôt que d'usurper
 			throw compteInconnu();
 		}
-		if (!TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
-			utilisateur.setSujet(jeton.getSubject());
+		if (!TransactionSynchronizationManager.isCurrentTransactionReadOnly()
+				&& utilisateurRepository.rattacherSujet(utilisateur.getId(), jeton.getSubject()) == 0) {
+			// Rattaché entre-temps par une autre requête, à un autre compte
+			throw compteInconnu();
 		}
 		return utilisateur;
 	}

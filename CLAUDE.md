@@ -84,6 +84,9 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - `@Table(name = "...")` explicite, contraintes de colonne (`nullable`, `length`, `unique`) déclarées.
 - Relations `@ManyToOne(fetch = FetchType.LAZY, optional = false)` avec `@JoinColumn` explicite.
 - Durées en `BigDecimal` (heures), dates en `LocalDate`.
+- Toute entité hérite d'`EntiteAuditee` (colonnes `cree_le`, `cree_par`, `modifie_le`,
+  `modifie_par`, remplies par Spring Data via `AuditConfig`, à inclure dans le script Flyway de la
+  table) ; horodatages d'audit en `Instant` (UTC), jamais renseignés par le code applicatif.
 - Éviter les mots réservés SQL comme noms de colonne (`date`, `user`…) : préférer `jour`, `utilisateur`.
 
 ### Repositories
@@ -107,7 +110,7 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - Messages de contrainte en français, explicites dans l'annotation quand ils sont visibles par
   l'utilisateur (`@DecimalMin(value = ..., message = "doit être d'au moins {value} h")`).
 - Le `Response` expose une fabrique `static from(Entite)` ; les relations sont exposées par leur id
-  (`projetId`, `tacheId`).
+  (`projetId`, `tacheId`) ; le dernier composant est `AuditResponse audit` (`AuditResponse.from(entite)`).
 - Un champ booléen optionnel en entrée est un `Boolean` (null = valeur par défaut).
 - Verrouillage optimiste : chaque entité a un `@Version Long version` (colonne `version`), exposé
   dans le `Response`. Le `Request` porte un `Long version` annoté

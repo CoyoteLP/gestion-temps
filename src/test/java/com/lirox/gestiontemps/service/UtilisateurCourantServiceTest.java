@@ -25,6 +25,8 @@ import com.lirox.gestiontemps.domain.Utilisateur;
 import com.lirox.gestiontemps.exception.AccesRefuseException;
 import com.lirox.gestiontemps.repository.UtilisateurRepository;
 
+import jakarta.persistence.EntityManager;
+
 /**
  * Identification de l'appelant à partir de son jeton et rattachement de son compte par email.
  */
@@ -33,13 +35,17 @@ import com.lirox.gestiontemps.repository.UtilisateurRepository;
 @Transactional
 class UtilisateurCourantServiceTest {
 
-	private static final String COMPTE_INCONNU = "Aucun utilisateur ne correspond à votre compte : contactez un administrateur";
+	private static final String COMPTE_INCONNU =
+			"Aucun utilisateur ne correspond à votre compte : contactez un administrateur";
 
 	@Autowired
 	private UtilisateurCourantService utilisateurCourantService;
 
 	@Autowired
 	private UtilisateurRepository utilisateurRepository;
+
+	@Autowired
+	private EntityManager entityManager;
 
 	@AfterEach
 	void oublierLAppelant() {
@@ -67,9 +73,12 @@ class UtilisateurCourantServiceTest {
 		utilisateurRepository.flush();
 		authentifier("sujet-1", Map.of("email", "jdupont@lirox.com", "email_verified", true));
 		utilisateurCourantService.get();
-		utilisateurRepository.flush();
-		assertThat(utilisateur.getSujet()).isEqualTo("sujet-1");
-		assertThat(utilisateur.getVersion()).isZero();
+		entityManager.clear();
+		Utilisateur relu = utilisateurRepository.findBySujet("sujet-1").orElseThrow();
+		assertThat(relu.getId()).isEqualTo(utilisateur.getId());
+		assertThat(relu.getVersion()).isZero();
+		assertThat(relu.getModifieLe()).isEqualTo(utilisateur.getModifieLe());
+		assertThat(relu.getModifiePar()).isNull();
 	}
 
 	@Test
@@ -114,6 +123,27 @@ class UtilisateurCourantServiceTest {
 		authentifier("sujet-2", Map.of("email", "jdupont@lirox.com", "email_verified", true));
 		assertThatThrownBy(utilisateurCourantService::get).isInstanceOf(AccesRefuseException.class)
 				.hasMessage(COMPTE_INCONNU);
+	}
+
+	/**
+	 * L'utilisateur est chargé sans compte rattaché, puis une autre requête lui rattache un premier
+	 * compte avant que celle-ci n'enregistre le sien : le second compte est refusé, le premier conservé.
+	 */
+	@Test
+	void refuseUnRattachementSiUnAutreCompteLAObtenuEntreTemps() {
+		Utilisateur utilisateur = save("jdupont@lirox.com", null);
+		utilisateurRepository.flush();
+		// Requête de mise à jour directe : l'entité chargée garde sujet = null, comme dans la requête concurrente
+		assertThat(utilisateurRepository.rattacherSujet(utilisateur.getId(), "sujet-1")).isEqualTo(1);
+		assertThat(utilisateur.getSujet()).isNull();
+
+		authentifier("sujet-2", Map.of("email", "jdupont@lirox.com", "email_verified", true));
+		assertThatThrownBy(utilisateurCourantService::get).isInstanceOf(AccesRefuseException.class)
+				.hasMessage(COMPTE_INCONNU);
+
+		entityManager.clear();
+		assertThat(utilisateurRepository.findBySujet("sujet-1")).map(Utilisateur::getId).contains(utilisateur.getId());
+		assertThat(utilisateurRepository.findBySujet("sujet-2")).isEmpty();
 	}
 
 	@Test

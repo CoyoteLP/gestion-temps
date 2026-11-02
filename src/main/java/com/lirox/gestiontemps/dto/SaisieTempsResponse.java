@@ -15,6 +15,7 @@ import com.lirox.gestiontemps.domain.SaisieTemps;
  * @param jour          journée travaillée
  * @param duree         durée en heures
  * @param commentaire   commentaire libre
+ * @param audit         date et auteur de la création et de la dernière modification
  */
 public record SaisieTempsResponse(
 		Long id,
@@ -23,15 +24,17 @@ public record SaisieTempsResponse(
 		Long tacheId,
 		LocalDate jour,
 		BigDecimal duree,
-		String commentaire) {
+		String commentaire,
+		AuditResponse audit) {
 
 	/**
 	 * @param saisie entité à convertir (appeler dans une transaction)
 	 * @return la représentation API de la saisie
 	 */
 	public static SaisieTempsResponse from(SaisieTemps saisie) {
-		return new SaisieTempsResponse(saisie.getId(), saisie.getVersion(), saisie.getUtilisateur().getId(), saisie.getTache().getId(),
-				saisie.getJour(), saisie.getDuree(), saisie.getCommentaire());
+		return new SaisieTempsResponse(saisie.getId(), saisie.getVersion(), saisie.getUtilisateur().getId(),
+				saisie.getTache().getId(), saisie.getJour(), saisie.getDuree(), saisie.getCommentaire(),
+				AuditResponse.from(saisie));
 	}
 
 }

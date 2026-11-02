@@ -115,6 +115,17 @@ class ProjetControllerTest {
 	}
 
 	@Test
+	void laReponseExposeLAuditDeLaCreation() throws Exception {
+		mockMvc.perform(post("/api/projets").contentType(MediaType.APPLICATION_JSON).content("""
+				{"code": "PRJ-01", "nom": "Projet"}
+				"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.audit.creeLe").isNotEmpty())
+				.andExpect(jsonPath("$.data.audit.creePar").value(JetonsDeTest.SUJET_ADMIN))
+				.andExpect(jsonPath("$.data.audit.modifiePar").value(JetonsDeTest.SUJET_ADMIN));
+	}
+
+	@Test
 	void updateIncrementeLaVersion() throws Exception {
 		Projet projet = save("PRJ-01");
 		mockMvc.perform(put("/api/projets/{id}", projet.getId()).contentType(MediaType.APPLICATION_JSON)

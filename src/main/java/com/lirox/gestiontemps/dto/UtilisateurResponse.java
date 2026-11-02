@@ -11,6 +11,7 @@ import com.lirox.gestiontemps.domain.Utilisateur;
  * @param nom     nom de famille
  * @param prenom  prénom
  * @param actif   false si l'utilisateur est désactivé
+ * @param audit   date et auteur de la création et de la dernière modification
  */
 public record UtilisateurResponse(
 		Long id,
@@ -18,15 +19,16 @@ public record UtilisateurResponse(
 		String email,
 		String nom,
 		String prenom,
-		boolean actif) {
+		boolean actif,
+		AuditResponse audit) {
 
 	/**
 	 * @param utilisateur entité à convertir
 	 * @return la représentation API de l'utilisateur
 	 */
 	public static UtilisateurResponse from(Utilisateur utilisateur) {
-		return new UtilisateurResponse(utilisateur.getId(), utilisateur.getVersion(), utilisateur.getEmail(), utilisateur.getNom(),
-				utilisateur.getPrenom(), utilisateur.isActif());
+		return new UtilisateurResponse(utilisateur.getId(), utilisateur.getVersion(), utilisateur.getEmail(),
+				utilisateur.getNom(), utilisateur.getPrenom(), utilisateur.isActif(), AuditResponse.from(utilisateur));
 	}
 
 }

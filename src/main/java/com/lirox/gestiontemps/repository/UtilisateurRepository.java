@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
@@ -45,6 +46,19 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, Long> 
 	 * @return l'utilisateur ayant cet email
 	 */
 	Optional<Utilisateur> findByEmail(String email);
+
+	/**
+	 * Rattache un compte du fournisseur OIDC à un utilisateur qui n'en a pas encore. Requête de mise
+	 * à jour directe : le rattachement n'est pas une modification de la fiche (ni version ni audit
+	 * changés), et la condition {@code sujet is null} empêche deux rattachements concurrents.
+	 *
+	 * @param id    identifiant de l'utilisateur
+	 * @param sujet identifiant du compte chez le fournisseur (revendication {@code sub})
+	 * @return 1 si le compte a été rattaché, 0 si l'utilisateur avait déjà un compte
+	 */
+	@Modifying
+	@Query("update Utilisateur u set u.sujet = :sujet where u.id = :id and u.sujet is null")
+	int rattacherSujet(@Param("id") Long id, @Param("sujet") String sujet);
 
 	/**
 	 * Charge l'utilisateur en posant un verrou en écriture sur sa ligne ({@code select … for update})

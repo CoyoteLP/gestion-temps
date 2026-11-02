@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 
@@ -35,6 +36,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.jayway.jsonpath.JsonPath;
 import com.lirox.gestiontemps.JetonsDeTest;
 import com.lirox.gestiontemps.domain.MembreProjet;
 import com.lirox.gestiontemps.domain.Projet;
@@ -59,13 +61,16 @@ class SaisieTempsControllerTest {
 	/** Date du jour vue par l'application pendant ces tests (horloge fixe). */
 	private static final LocalDate AUJOURDHUI = LocalDate.of(2026, 6, 15);
 
+	/** Instant de l'horloge fixe : minuit le jour {@link #AUJOURDHUI}, dans le fuseau de la JVM. */
+	private static final Instant INSTANT_FIXE = AUJOURDHUI.atStartOfDay(ZoneId.systemDefault()).toInstant();
+
 	@TestConfiguration
 	static class HorlogeFixe {
 
 		@Bean
 		@Primary
 		Clock horlogeFixe() {
-			return Clock.fixed(AUJOURDHUI.atStartOfDay(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+			return Clock.fixed(INSTANT_FIXE, ZoneId.systemDefault());
 		}
 
 	}
@@ -487,6 +492,39 @@ class SaisieTempsControllerTest {
 				.andExpect(status().isConflict());
 		mockMvc.perform(delete("/api/utilisateurs/{id}", utilisateur.getId()))
 				.andExpect(status().isConflict());
+	}
+
+	// Audit : date (horloge fixe) et auteur (email du jeton, ou sub à défaut)
+
+	@Test
+	void laCreationEnregistreSaDateEtSonAuteur() throws Exception {
+		mockMvc.perform(post("/api/saisies-temps").contentType(MediaType.APPLICATION_JSON).content("""
+				{"utilisateurId": %d, "tacheId": %d, "duree": 2}
+				""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.audit.creeLe").value(INSTANT_FIXE.toString()))
+				.andExpect(jsonPath("$.data.audit.creePar").value(JetonsDeTest.SUJET_ADMIN))
+				.andExpect(jsonPath("$.data.audit.modifieLe").value(INSTANT_FIXE.toString()))
+				.andExpect(jsonPath("$.data.audit.modifiePar").value(JetonsDeTest.SUJET_ADMIN));
+	}
+
+	@Test
+	void laModificationEnregistreSonAuteurSansToucherALaCreation() throws Exception {
+		Utilisateur collaborateur = saveCollaborateur("cdurand@lirox.com");
+		String id = JsonPath.read(mockMvc.perform(post("/api/saisies-temps").contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"utilisateurId": %d, "tacheId": %d, "duree": 2}
+						""".formatted(collaborateur.getId(), tache.getId())))
+				.andReturn().getResponse().getContentAsString(), "$.data.id").toString();
+		mockMvc.perform(put("/api/saisies-temps/{id}", id)
+				.with(jwt().jwt(jeton -> jeton.subject(collaborateur.getSujet()).claim("email", "cdurand@lirox.com")))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"version": 0, "tacheId": %d, "duree": 3}
+						""".formatted(tache.getId())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.audit.creePar").value(JetonsDeTest.SUJET_ADMIN))
+				.andExpect(jsonPath("$.data.audit.creeLe").value(INSTANT_FIXE.toString()))
+				.andExpect(jsonPath("$.data.audit.modifiePar").value("cdurand@lirox.com"));
 	}
 
 	// Droits d'accès d'un collaborateur : jeton sans rôle administrateur, compte rattaché (sujet)

@@ -11,6 +11,7 @@ import com.lirox.gestiontemps.domain.Tache;
  * @param libelle     libellé de la tâche
  * @param description description libre
  * @param actif       false si la tâche est désactivée
+ * @param audit       date et auteur de la création et de la dernière modification
  */
 public record TacheResponse(
 		Long id,
@@ -18,7 +19,8 @@ public record TacheResponse(
 		Long projetId,
 		String libelle,
 		String description,
-		boolean actif) {
+		boolean actif,
+		AuditResponse audit) {
 
 	/**
 	 * @param tache entité à convertir (son projet doit être chargeable : appeler dans une transaction)
@@ -26,7 +28,7 @@ public record TacheResponse(
 	 */
 	public static TacheResponse from(Tache tache) {
 		return new TacheResponse(tache.getId(), tache.getVersion(), tache.getProjet().getId(), tache.getLibelle(),
-				tache.getDescription(), tache.isActif());
+				tache.getDescription(), tache.isActif(), AuditResponse.from(tache));
 	}
 
 }
