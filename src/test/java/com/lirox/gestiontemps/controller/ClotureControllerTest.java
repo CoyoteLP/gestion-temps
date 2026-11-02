@@ -213,11 +213,11 @@ class ClotureControllerTest {
 		saveCloture(saveProjet("PRJ-02", true), MOIS_TERMINE);
 		mockMvc.perform(get("/api/clotures").param("projetId", projet.getId().toString()))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()").value(2))
-				.andExpect(jsonPath("$.data[0].mois").value("2026-05"))
-				.andExpect(jsonPath("$.data[1].mois").value("2026-04"));
+				.andExpect(jsonPath("$.data.contenu.length()").value(2))
+				.andExpect(jsonPath("$.data.contenu[0].mois").value("2026-05"))
+				.andExpect(jsonPath("$.data.contenu[1].mois").value("2026-04"));
 		mockMvc.perform(get("/api/clotures").param("mois", "2026-05"))
-				.andExpect(jsonPath("$.data.length()").value(2));
+				.andExpect(jsonPath("$.data.contenu.length()").value(2));
 		mockMvc.perform(get("/api/clotures/{id}", mai.getId()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.mois").value("2026-05"));
@@ -231,7 +231,7 @@ class ClotureControllerTest {
 		saveCloture(projet, MOIS_TERMINE);
 		mockMvc.perform(get("/api/clotures").with(collaborateur(saveUtilisateur("jdupont@lirox.com"))))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()").value(1));
+				.andExpect(jsonPath("$.data.contenu.length()").value(1));
 	}
 
 	@Test

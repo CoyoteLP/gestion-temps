@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.lirox.gestiontemps.JetonsDeTest;
+import com.lirox.gestiontemps.common.Constantes;
 import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.repository.ProjetRepository;
@@ -82,7 +83,7 @@ class ProjetControllerTest {
 		Projet projet = save("PRJ-01");
 		mockMvc.perform(get("/api/projets"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()").value(1));
+				.andExpect(jsonPath("$.data.contenu.length()").value(1));
 		mockMvc.perform(get("/api/projets/{id}", projet.getId()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.nom").value("Projet PRJ-01"));
@@ -112,6 +113,68 @@ class ProjetControllerTest {
 				"""))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.version").value(0));
+	}
+
+	// Pagination, commune à toutes les listes : page à partir de 1, taille 20 par défaut, 100 au plus
+
+	@Test
+	void laListeEstPagineeParVingtParDefaut() throws Exception {
+		for (int i = 1; i <= 25; i++) {
+			save("PRJ-%02d".formatted(i));
+		}
+		mockMvc.perform(get("/api/projets"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.contenu.length()").value(20))
+				.andExpect(jsonPath("$.data.contenu[0].code").value("PRJ-01"))
+				.andExpect(jsonPath("$.data.page").value(1))
+				.andExpect(jsonPath("$.data.taille").value(20))
+				.andExpect(jsonPath("$.data.total").value(25))
+				.andExpect(jsonPath("$.data.pages").value(2));
+		mockMvc.perform(get("/api/projets").param("page", "2"))
+				.andExpect(jsonPath("$.data.contenu.length()").value(5))
+				.andExpect(jsonPath("$.data.contenu[0].code").value("PRJ-21"))
+				.andExpect(jsonPath("$.data.page").value(2));
+		mockMvc.perform(get("/api/projets").param("page", "3").param("taille", "10"))
+				.andExpect(jsonPath("$.data.contenu.length()").value(5))
+				.andExpect(jsonPath("$.data.pages").value(3));
+	}
+
+	@Test
+	void unePageAuDelaDeLaDerniereEstVide() throws Exception {
+		save("PRJ-01");
+		mockMvc.perform(get("/api/projets").param("page", "5"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.contenu.length()").value(0))
+				.andExpect(jsonPath("$.data.total").value(1));
+	}
+
+	@Test
+	void laDernierePagePossibleEstAccepteeAvecLaTailleMaximale() throws Exception {
+		mockMvc.perform(get("/api/projets").param("page", String.valueOf(Constantes.PAGE_MAX))
+				.param("taille", String.valueOf(Constantes.TAILLE_PAGE_MAX)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.contenu.length()").value(0))
+				.andExpect(jsonPath("$.data.page").value(Constantes.PAGE_MAX));
+	}
+
+	@Test
+	void uneTailleAuDelaDuMaximumEstRameneeACent() throws Exception {
+		mockMvc.perform(get("/api/projets").param("taille", "500"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.taille").value(100));
+	}
+
+	@ParameterizedTest
+	@CsvSource(delimiter = '|', value = {
+			"page   | 0   | page : doit être supérieur ou égal à 1",
+			"taille | 0   | taille : doit être supérieur ou égal à 1",
+			"page   | abc | page : format invalide",
+			"taille | -5  | taille : doit être supérieur ou égal à 1",
+			"page   | 21474837 | page : doit être inférieur ou égal à 21474836" })
+	void unePageOuUneTailleInvalideRenvoie400(String parametre, String valeur, String message) throws Exception {
+		mockMvc.perform(get("/api/projets").param(parametre, valeur))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value("Requête invalide : " + message));
 	}
 
 	@Test

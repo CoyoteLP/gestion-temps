@@ -1,7 +1,6 @@
 package com.lirox.gestiontemps.controller;
 
 import java.net.URI;
-import java.util.List;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -16,6 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.lirox.gestiontemps.dto.ApiResponse;
+import com.lirox.gestiontemps.dto.PageResponse;
+import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.ProjetRequest;
 import com.lirox.gestiontemps.dto.ProjetResponse;
 import com.lirox.gestiontemps.service.ProjetService;
@@ -36,13 +37,14 @@ public class ProjetController {
 	private final ProjetService projetService;
 
 	/**
-	 * {@code GET /api/projets} : liste des projets.
+	 * {@code GET /api/projets?page=&taille=} : liste paginée des projets.
 	 *
-	 * @return tous les projets
+	 * @param pagination page demandée (à partir de 1) et taille
+	 * @return une page de projets
 	 */
 	@GetMapping
-	public ApiResponse<List<ProjetResponse>> findAll() {
-		return ApiResponse.success(projetService.findAll());
+	public ApiResponse<PageResponse<ProjetResponse>> findAll(@Valid PaginationRequest pagination) {
+		return ApiResponse.success(projetService.findAll(pagination));
 	}
 
 	/**

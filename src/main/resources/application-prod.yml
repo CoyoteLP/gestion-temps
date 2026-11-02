@@ -5,6 +5,13 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+
+# Documentation OpenAPI (/v3/api-docs, /swagger-ui.html) : désactivée en production sauf OPENAPI_ACTIVE=true
+springdoc:
+  api-docs:
+    enabled: ${OPENAPI_ACTIVE:false}
+  swagger-ui:
+    enabled: ${OPENAPI_ACTIVE:false}
   security:
     oauth2:
       resourceserver:

@@ -1,7 +1,6 @@
 package com.lirox.gestiontemps.service;
 
-import java.util.List;
-
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -9,6 +8,8 @@ import com.lirox.gestiontemps.domain.MembreProjet;
 import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.dto.MembreProjetRequest;
 import com.lirox.gestiontemps.dto.MembreProjetResponse;
+import com.lirox.gestiontemps.dto.PageResponse;
+import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.exception.DuplicateResourceException;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.exception.ResourceNotFoundException;
@@ -30,14 +31,15 @@ public class MembreProjetService {
 	private final UtilisateurService utilisateurService;
 
 	/**
-	 * @param projetId identifiant du projet
-	 * @return les membres du projet
+	 * @param projetId   identifiant du projet
+	 * @param pagination page demandée
+	 * @return une page de membres du projet, par identifiant croissant
 	 * @throws ResourceNotFoundException si le projet n'existe pas
 	 */
-	public List<MembreProjetResponse> findAll(Long projetId) {
+	public PageResponse<MembreProjetResponse> findAll(Long projetId, PaginationRequest pagination) {
 		projetService.getProjet(projetId);
-		return membreProjetRepository.findByProjetIdOrderById(projetId).stream().map(MembreProjetResponse::from)
-				.toList();
+		return PageResponse.from(membreProjetRepository.findByProjetId(projetId, pagination.versPageRequest(Sort.by("id"))),
+				MembreProjetResponse::from);
 	}
 
 	/**

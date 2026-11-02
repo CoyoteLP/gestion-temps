@@ -1,7 +1,6 @@
 package com.lirox.gestiontemps.controller;
 
 import java.net.URI;
-import java.util.List;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -17,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.lirox.gestiontemps.dto.ApiResponse;
+import com.lirox.gestiontemps.dto.PageResponse;
+import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.TacheRequest;
 import com.lirox.gestiontemps.dto.TacheResponse;
 import com.lirox.gestiontemps.service.TacheService;
@@ -43,8 +44,9 @@ public class TacheController {
 	 * @return les tâches correspondantes
 	 */
 	@GetMapping
-	public ApiResponse<List<TacheResponse>> findAll(@RequestParam(required = false) Long projetId) {
-		return ApiResponse.success(tacheService.findAll(projetId));
+	public ApiResponse<PageResponse<TacheResponse>> findAll(@RequestParam(required = false) Long projetId,
+			@Valid PaginationRequest pagination) {
+		return ApiResponse.success(tacheService.findAll(projetId, pagination));
 	}
 
 	/**

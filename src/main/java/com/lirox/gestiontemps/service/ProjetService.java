@@ -2,10 +2,13 @@ package com.lirox.gestiontemps.service;
 
 import java.util.List;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.lirox.gestiontemps.domain.Projet;
+import com.lirox.gestiontemps.dto.PageResponse;
+import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.ProjetRequest;
 import com.lirox.gestiontemps.dto.ProjetResponse;
 import com.lirox.gestiontemps.exception.DuplicateResourceException;
@@ -33,10 +36,12 @@ public class ProjetService {
 	private final ClotureRepository clotureRepository;
 
 	/**
-	 * @return tous les projets
+	 * @param pagination page demandée
+	 * @return une page de projets, par identifiant croissant
 	 */
-	public List<ProjetResponse> findAll() {
-		return projetRepository.findAll().stream().map(ProjetResponse::from).toList();
+	public PageResponse<ProjetResponse> findAll(PaginationRequest pagination) {
+		return PageResponse.from(projetRepository.findAll(pagination.versPageRequest(Sort.by("id"))),
+				ProjetResponse::from);
 	}
 
 	/**

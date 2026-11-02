@@ -89,11 +89,11 @@ class TacheControllerTest {
 		save(saveProjet("PRJ-02"), "Recette");
 		mockMvc.perform(get("/api/taches"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()").value(2));
+				.andExpect(jsonPath("$.data.contenu.length()").value(2));
 		mockMvc.perform(get("/api/taches").param("projetId", projet.getId().toString()))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()").value(1))
-				.andExpect(jsonPath("$.data[0].libelle").value("Dev"));
+				.andExpect(jsonPath("$.data.contenu.length()").value(1))
+				.andExpect(jsonPath("$.data.contenu[0].libelle").value("Dev"));
 	}
 
 	@Test

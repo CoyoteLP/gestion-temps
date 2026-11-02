@@ -3,8 +3,10 @@ package com.lirox.gestiontemps.service;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
-import java.util.List;
+import java.time.YearMonth;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +16,9 @@ import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.domain.SaisieTemps;
 import com.lirox.gestiontemps.domain.Tache;
 import com.lirox.gestiontemps.domain.Utilisateur;
+import com.lirox.gestiontemps.dto.PageResponse;
+import com.lirox.gestiontemps.dto.PaginationRequest;
+import com.lirox.gestiontemps.dto.RechercheSaisiesRequest;
 import com.lirox.gestiontemps.dto.SaisieTempsRequest;
 import com.lirox.gestiontemps.dto.SaisieTempsResponse;
 import com.lirox.gestiontemps.exception.AccesRefuseException;
@@ -52,24 +57,24 @@ public class SaisieTempsService {
 	private final Clock clock;
 
 	/**
-	 * Recherche les saisies, triées par jour ; chaque filtre est optionnel (null = non filtré).
+	 * Recherche les saisies sur une période (le mois en cours par défaut), triées par jour ; les
+	 * autres filtres sont optionnels (null = non filtré).
 	 * <p>
 	 * Un collaborateur obtient ses propres saisies (filtre utilisateur par défaut), ou toutes celles
 	 * d'un projet dont il est membre lorsqu'il filtre sur ce projet ou sur une de ses tâches.
 	 *
-	 * @param utilisateurId saisies de cet utilisateur
-	 * @param projetId      saisies sur les tâches de ce projet
-	 * @param tacheId       saisies sur cette tâche
-	 * @param du            saisies à partir de ce jour (inclus)
-	 * @param au            saisies jusqu'à ce jour (inclus)
-	 * @return les saisies correspondantes
+	 * @param filtres    utilisateur, projet, tâche et période (validés : période complète, ordonnée,
+	 *                   d'au plus {@value Constantes#DUREE_MAX_RECHERCHE_ANNEES} an)
+	 * @param pagination page demandée
+	 * @return une page de saisies correspondantes
 	 * @throws ResourceNotFoundException si la tâche filtrée n'existe pas
 	 * @throws AccesRefuseException      si un collaborateur demande les saisies d'un autre utilisateur
 	 *                                   hors d'un projet dont il est membre
 	 */
-	public List<SaisieTempsResponse> search(Long utilisateurId, Long projetId, Long tacheId, LocalDate du,
-			LocalDate au) {
-		Long utilisateurFiltre = utilisateurId;
+	public PageResponse<SaisieTempsResponse> search(RechercheSaisiesRequest filtres, PaginationRequest pagination) {
+		Long utilisateurFiltre = filtres.utilisateurId();
+		Long projetId = filtres.projetId();
+		Long tacheId = filtres.tacheId();
 		if (!utilisateurCourantService.estAdmin()) {
 			Long moi = utilisateurCourantService.get().getId();
 			Long projetFiltre = tacheId != null ? tacheService.getTache(tacheId).getProjet().getId() : projetId;
@@ -82,8 +87,12 @@ public class SaisieTempsService {
 				utilisateurFiltre = moi;
 			}
 		}
-		return saisieTempsRepository.search(utilisateurFiltre, projetId, tacheId, du, au).stream()
-				.map(SaisieTempsResponse::from).toList();
+		YearMonth moisEnCours = YearMonth.now(clock);
+		LocalDate du = filtres.du() != null ? filtres.du() : moisEnCours.atDay(1);
+		LocalDate au = filtres.au() != null ? filtres.au() : moisEnCours.atEndOfMonth();
+		PageRequest page = pagination.versPageRequest(Sort.by("jour", "id"));
+		return PageResponse.from(saisieTempsRepository.search(utilisateurFiltre, projetId, tacheId, du, au, page),
+				SaisieTempsResponse::from);
 	}
 
 	/**

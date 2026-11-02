@@ -1,8 +1,9 @@
 package com.lirox.gestiontemps.repository;
 
-import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.lirox.gestiontemps.domain.MembreProjet;
@@ -14,9 +15,10 @@ public interface MembreProjetRepository extends JpaRepository<MembreProjet, Long
 
 	/**
 	 * @param projetId identifiant du projet
-	 * @return les membres du projet
+	 * @param page     page et tri demandés
+	 * @return la page de membres du projet
 	 */
-	List<MembreProjet> findByProjetIdOrderById(Long projetId);
+	Page<MembreProjet> findByProjetId(Long projetId, Pageable page);
 
 	/**
 	 * @param id       identifiant du membre
