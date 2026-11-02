@@ -1,7 +1,6 @@
 package com.lirox.gestiontemps.controller;
 
 import java.net.URI;
-import java.util.List;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -18,6 +17,8 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import com.lirox.gestiontemps.dto.ApiResponse;
 import com.lirox.gestiontemps.dto.MembreProjetRequest;
 import com.lirox.gestiontemps.dto.MembreProjetResponse;
+import com.lirox.gestiontemps.dto.PageResponse;
+import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.service.MembreProjetService;
 import com.lirox.gestiontemps.validation.Modification;
 
@@ -43,8 +44,9 @@ public class MembreProjetController {
 	 * @return les membres du projet (404 si le projet n'existe pas)
 	 */
 	@GetMapping
-	public ApiResponse<List<MembreProjetResponse>> findAll(@PathVariable Long projetId) {
-		return ApiResponse.success(membreProjetService.findAll(projetId));
+	public ApiResponse<PageResponse<MembreProjetResponse>> findAll(@PathVariable Long projetId,
+			@Valid PaginationRequest pagination) {
+		return ApiResponse.success(membreProjetService.findAll(projetId, pagination));
 	}
 
 	/**

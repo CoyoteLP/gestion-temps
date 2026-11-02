@@ -46,6 +46,21 @@ public final class Constantes {
 	 */
 	public static final String ROLE_ADMIN = "ADMIN";
 
+	/** Nombre d'éléments par page d'une liste quand le client ne précise pas {@code taille}. */
+	public static final int TAILLE_PAGE_PAR_DEFAUT = 20;
+
+	/** Nombre maximal d'éléments par page : une taille demandée au-delà y est ramenée. */
+	public static final int TAILLE_PAGE_MAX = 100;
+
+	/**
+	 * Numéro de page maximal : au-delà, le décalage (page × taille) dépasserait la capacité d'un
+	 * {@code int}, que Spring Data refuse.
+	 */
+	public static final int PAGE_MAX = Integer.MAX_VALUE / TAILLE_PAGE_MAX;
+
+	/** Étendue maximale d'une recherche de saisies (de {@code du} à {@code au} inclus), en années. */
+	public static final int DUREE_MAX_RECHERCHE_ANNEES = 1;
+
 	private Constantes() {
 	}
 

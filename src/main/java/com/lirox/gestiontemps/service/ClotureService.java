@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +16,8 @@ import com.lirox.gestiontemps.domain.Cloture;
 import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.dto.ClotureRequest;
 import com.lirox.gestiontemps.dto.ClotureResponse;
+import com.lirox.gestiontemps.dto.PageResponse;
+import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.exception.AccesRefuseException;
 import com.lirox.gestiontemps.exception.BusinessRuleException;
 import com.lirox.gestiontemps.exception.DuplicateResourceException;
@@ -44,13 +47,16 @@ public class ClotureService {
 	private final Clock clock;
 
 	/**
-	 * @param projetId filtre optionnel sur le projet
-	 * @param mois     filtre optionnel sur le mois
-	 * @return les clôtures correspondantes, du mois le plus récent au plus ancien
+	 * @param projetId   filtre optionnel sur le projet
+	 * @param mois       filtre optionnel sur le mois
+	 * @param pagination page demandée
+	 * @return une page de clôtures, du mois le plus récent au plus ancien
 	 */
-	public List<ClotureResponse> search(Long projetId, YearMonth mois) {
+	public PageResponse<ClotureResponse> search(Long projetId, YearMonth mois, PaginationRequest pagination) {
 		LocalDate premierJour = mois == null ? null : mois.atDay(1);
-		return clotureRepository.search(projetId, premierJour).stream().map(ClotureResponse::from).toList();
+		Sort tri = Sort.by(Sort.Order.desc("mois"), Sort.Order.asc("projet.id"));
+		return PageResponse.from(clotureRepository.search(projetId, premierJour, pagination.versPageRequest(tri)),
+				ClotureResponse::from);
 	}
 
 	/**

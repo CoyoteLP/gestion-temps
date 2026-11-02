@@ -1,7 +1,6 @@
 package com.lirox.gestiontemps.controller;
 
 import java.net.URI;
-import java.util.List;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -16,6 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.lirox.gestiontemps.dto.ApiResponse;
+import com.lirox.gestiontemps.dto.PageResponse;
+import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.UtilisateurRequest;
 import com.lirox.gestiontemps.dto.UtilisateurResponse;
 import com.lirox.gestiontemps.service.UtilisateurService;
@@ -41,8 +42,8 @@ public class UtilisateurController {
 	 * @return tous les utilisateurs
 	 */
 	@GetMapping
-	public ApiResponse<List<UtilisateurResponse>> findAll() {
-		return ApiResponse.success(utilisateurService.findAll());
+	public ApiResponse<PageResponse<UtilisateurResponse>> findAll(@Valid PaginationRequest pagination) {
+		return ApiResponse.success(utilisateurService.findAll(pagination));
 	}
 
 	/**

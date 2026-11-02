@@ -20,6 +20,8 @@ import com.lirox.gestiontemps.dto.ApiResponse;
 import com.lirox.gestiontemps.dto.ClotureRequest;
 import com.lirox.gestiontemps.dto.ClotureResponse;
 import com.lirox.gestiontemps.dto.ClotureTousProjetsRequest;
+import com.lirox.gestiontemps.dto.PageResponse;
+import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.service.ClotureService;
 
 import jakarta.validation.Valid;
@@ -45,9 +47,9 @@ public class ClotureController {
 	 * @return les clôtures correspondantes, du mois le plus récent au plus ancien
 	 */
 	@GetMapping
-	public ApiResponse<List<ClotureResponse>> search(@RequestParam(required = false) Long projetId,
-			@RequestParam(required = false) YearMonth mois) {
-		return ApiResponse.success(clotureService.search(projetId, mois));
+	public ApiResponse<PageResponse<ClotureResponse>> search(@RequestParam(required = false) Long projetId,
+			@RequestParam(required = false) YearMonth mois, @Valid PaginationRequest pagination) {
+		return ApiResponse.success(clotureService.search(projetId, mois, pagination));
 	}
 
 	/**

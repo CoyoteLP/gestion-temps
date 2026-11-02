@@ -1,8 +1,6 @@
 package com.lirox.gestiontemps.controller;
 
 import java.net.URI;
-import java.time.LocalDate;
-import java.util.List;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -13,11 +11,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.lirox.gestiontemps.dto.ApiResponse;
+import com.lirox.gestiontemps.dto.PageResponse;
+import com.lirox.gestiontemps.dto.PaginationRequest;
+import com.lirox.gestiontemps.dto.RechercheSaisiesRequest;
 import com.lirox.gestiontemps.dto.SaisieTempsRequest;
 import com.lirox.gestiontemps.dto.SaisieTempsResponse;
 import com.lirox.gestiontemps.service.SaisieTempsService;
@@ -38,24 +38,19 @@ public class SaisieTempsController {
 	private final SaisieTempsService saisieTempsService;
 
 	/**
-	 * {@code GET /api/saisies-temps?utilisateurId=&projetId=&tacheId=&du=&au=} : recherche de saisies.
-	 * Un collaborateur obtient ses saisies, ou celles d'un projet dont il est membre.
+	 * {@code GET /api/saisies-temps?utilisateurId=&projetId=&tacheId=&du=&au=&page=&taille=} : recherche
+	 * paginée de saisies, sur le mois en cours sans {@code du} ni {@code au}. Un collaborateur obtient
+	 * ses saisies, ou celles d'un projet dont il est membre.
 	 *
-	 * @param utilisateurId filtre optionnel sur l'utilisateur
-	 * @param projetId      filtre optionnel sur le projet
-	 * @param tacheId       filtre optionnel sur la tâche
-	 * @param du            filtre optionnel : à partir de ce jour (inclus, format AAAA-MM-JJ)
-	 * @param au            filtre optionnel : jusqu'à ce jour (inclus, format AAAA-MM-JJ)
-	 * @return les saisies correspondantes, triées par jour
+	 * @param filtres    utilisateur, projet, tâche (optionnels) et période (format AAAA-MM-JJ, bornes
+	 *                   incluses, au plus un an ; 400 si une seule borne, inversée ou trop longue)
+	 * @param pagination page demandée (à partir de 1) et taille
+	 * @return une page de saisies, triées par jour
 	 */
 	@GetMapping
-	public ApiResponse<List<SaisieTempsResponse>> search(
-			@RequestParam(required = false) Long utilisateurId,
-			@RequestParam(required = false) Long projetId,
-			@RequestParam(required = false) Long tacheId,
-			@RequestParam(required = false) LocalDate du,
-			@RequestParam(required = false) LocalDate au) {
-		return ApiResponse.success(saisieTempsService.search(utilisateurId, projetId, tacheId, du, au));
+	public ApiResponse<PageResponse<SaisieTempsResponse>> search(@Valid RechercheSaisiesRequest filtres,
+			@Valid PaginationRequest pagination) {
+		return ApiResponse.success(saisieTempsService.search(filtres, pagination));
 	}
 
 	/**

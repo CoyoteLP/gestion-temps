@@ -129,9 +129,9 @@ class MembreProjetControllerTest {
 		save(saveProjet("PRJ-02"), utilisateur, RoleProjet.BACKUP);
 		mockMvc.perform(get("/api/projets/{projetId}/membres", projet.getId()))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()").value(2))
-				.andExpect(jsonPath("$.data[0].role").value("MANAGER"))
-				.andExpect(jsonPath("$.data[1].role").value("BACKUP"));
+				.andExpect(jsonPath("$.data.contenu.length()").value(2))
+				.andExpect(jsonPath("$.data.contenu[0].role").value("MANAGER"))
+				.andExpect(jsonPath("$.data.contenu[1].role").value("BACKUP"));
 		mockMvc.perform(get("/api/projets/{projetId}/membres/{id}", projet.getId(), membre.getId()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.utilisateurId").value(utilisateur.getId()));

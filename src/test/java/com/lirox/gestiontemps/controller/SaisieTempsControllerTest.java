@@ -35,6 +35,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.jayway.jsonpath.JsonPath;
@@ -458,16 +459,73 @@ class SaisieTempsControllerTest {
 		save(utilisateur, LocalDate.of(2026, 10, 1));
 		save(utilisateur, LocalDate.of(2026, 10, 15));
 		save(autre, LocalDate.of(2026, 10, 15));
-		mockMvc.perform(get("/api/saisies-temps"))
+		mockMvc.perform(get("/api/saisies-temps").param("du", "2026-10-01").param("au", "2026-10-31"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()").value(3));
+				.andExpect(jsonPath("$.data.contenu.length()").value(3));
 		mockMvc.perform(get("/api/saisies-temps")
 				.param("utilisateurId", utilisateur.getId().toString())
 				.param("du", "2026-10-10")
 				.param("au", "2026-10-31"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()").value(1))
-				.andExpect(jsonPath("$.data[0].jour").value("2026-10-15"));
+				.andExpect(jsonPath("$.data.contenu.length()").value(1))
+				.andExpect(jsonPath("$.data.contenu[0].jour").value("2026-10-15"));
+	}
+
+	// Période de recherche : mois en cours par défaut, sinon du et au ensemble, au plus un an
+
+	@Test
+	void searchSansPeriodePorteSurLeMoisEnCours() throws Exception {
+		save(utilisateur, LocalDate.of(2026, 5, 31));
+		save(utilisateur, LocalDate.of(2026, 6, 1));
+		save(utilisateur, LocalDate.of(2026, 6, 30));
+		save(utilisateur, LocalDate.of(2026, 7, 1));
+		mockMvc.perform(get("/api/saisies-temps"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.contenu.length()").value(2))
+				.andExpect(jsonPath("$.data.contenu[0].jour").value("2026-06-01"))
+				.andExpect(jsonPath("$.data.contenu[1].jour").value("2026-06-30"));
+	}
+
+	@Test
+	void searchAccepteUnePeriodeDUnAnExactement() throws Exception {
+		save(utilisateur, LocalDate.of(2026, 1, 1));
+		save(utilisateur, LocalDate.of(2026, 12, 31));
+		mockMvc.perform(get("/api/saisies-temps").param("du", "2026-01-01").param("au", "2026-12-31"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.contenu.length()").value(2));
+	}
+
+	@ParameterizedTest
+	@CsvSource(delimiter = '|', value = {
+			"2026-06-01 |            | periodeComplete : du et au doivent être fournis ensemble (sans eux : mois en cours)",
+			"           | 2026-06-30 | periodeComplete : du et au doivent être fournis ensemble (sans eux : mois en cours)",
+			"2026-06-30 | 2026-06-01 | periodeOrdonnee : au doit être postérieur ou égal à du",
+			"2026-01-01 | 2027-01-01 | periodeLimitee : la période ne doit pas dépasser 1 an",
+			"abc        | 2026-06-30 | du : format invalide" })
+	void searchRefuseUnePeriodeInvalide(String du, String au, String message) throws Exception {
+		MockHttpServletRequestBuilder requete = get("/api/saisies-temps");
+		if (du != null) {
+			requete.param("du", du);
+		}
+		if (au != null) {
+			requete.param("au", au);
+		}
+		mockMvc.perform(requete)
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value("Requête invalide : " + message));
+	}
+
+	@Test
+	void searchEstPagineeEtTrieeParJour() throws Exception {
+		for (int jour = 25; jour >= 1; jour--) {
+			save(utilisateur, LocalDate.of(2026, 6, jour), "0.5");
+		}
+		mockMvc.perform(get("/api/saisies-temps").param("taille", "10").param("page", "2"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.contenu.length()").value(10))
+				.andExpect(jsonPath("$.data.contenu[0].jour").value("2026-06-11"))
+				.andExpect(jsonPath("$.data.total").value(25))
+				.andExpect(jsonPath("$.data.pages").value(3));
 	}
 
 	@Test
@@ -723,10 +781,11 @@ class SaisieTempsControllerTest {
 		Utilisateur collaborateur = saveCollaborateur("cdurand@lirox.com");
 		SaisieTemps saisieDUnAutre = save(utilisateur, LocalDate.of(2026, 10, 30));
 		SaisieTemps saSaisie = save(collaborateur, LocalDate.of(2026, 10, 30));
-		mockMvc.perform(get("/api/saisies-temps").with(collaborateur(collaborateur)))
+		mockMvc.perform(get("/api/saisies-temps").param("du", "2026-10-01").param("au", "2026-10-31")
+				.with(collaborateur(collaborateur)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()").value(1))
-				.andExpect(jsonPath("$.data[0].id").value(saSaisie.getId()));
+				.andExpect(jsonPath("$.data.contenu.length()").value(1))
+				.andExpect(jsonPath("$.data.contenu[0].id").value(saSaisie.getId()));
 		mockMvc.perform(get("/api/saisies-temps").param("utilisateurId", utilisateur.getId().toString())
 				.with(collaborateur(collaborateur)))
 				.andExpect(status().isForbidden())
@@ -750,21 +809,25 @@ class SaisieTempsControllerTest {
 		saisieHorsProjet.setTache(tacheHorsProjet);
 
 		mockMvc.perform(get("/api/saisies-temps").param("projetId", tache.getProjet().getId().toString())
+				.param("du", "2026-10-01").param("au", "2026-10-31")
 				.with(collaborateur(membre)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()").value(2));
+				.andExpect(jsonPath("$.data.contenu.length()").value(2));
 		mockMvc.perform(get("/api/saisies-temps").param("tacheId", tache.getId().toString())
-				.param("utilisateurId", utilisateur.getId().toString()).with(collaborateur(membre)))
+				.param("utilisateurId", utilisateur.getId().toString())
+				.param("du", "2026-10-01").param("au", "2026-10-31").with(collaborateur(membre)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()").value(1))
-				.andExpect(jsonPath("$.data[0].id").value(saisieDUnAutre.getId()));
+				.andExpect(jsonPath("$.data.contenu.length()").value(1))
+				.andExpect(jsonPath("$.data.contenu[0].id").value(saisieDUnAutre.getId()));
 		mockMvc.perform(get("/api/saisies-temps/{id}", saisieDUnAutre.getId()).with(collaborateur(membre)))
 				.andExpect(status().isOk());
 
-		mockMvc.perform(get("/api/saisies-temps").param("projetId", tacheHorsProjet.getProjet().getId().toString())
+		mockMvc.perform(get("/api/saisies-temps")
+				.param("projetId", tacheHorsProjet.getProjet().getId().toString())
+				.param("du", "2026-10-01").param("au", "2026-10-31")
 				.with(collaborateur(membre)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()").value(0));
+				.andExpect(jsonPath("$.data.contenu.length()").value(0));
 		mockMvc.perform(get("/api/saisies-temps/{id}", saisieHorsProjet.getId()).with(collaborateur(membre)))
 				.andExpect(status().isForbidden());
 	}

@@ -81,9 +81,27 @@ Les ressources `utilisateurs`, `taches` et `saisies-temps` exposent les mêmes o
 |--------------------------|----------------------------------------------|
 | /api/utilisateurs        | –                                            |
 | /api/taches              | `projetId`                                   |
-| /api/saisies-temps       | `utilisateurId`, `projetId`, `tacheId`, `du`, `au` (dates) |
+| /api/saisies-temps       | `utilisateurId`, `projetId`, `tacheId`, `du`, `au` (dates, voir ci-dessous) |
 | /api/projets/{projetId}/membres | –                                     |
 | /api/clotures            | `projetId`, `mois` (AAAA-MM)                 |
+
+Toutes les listes sont **paginées** : paramètres `page` (à partir de 1, 1 par défaut) et `taille`
+(20 par défaut, ramenée à 100 au-delà) ; `data` contient alors la page :
+
+```json
+{ "status": "success",
+  "data": { "contenu": [ { "id": 1, "code": "PRJ-01" } ], "page": 1, "taille": 20, "total": 1, "pages": 1 },
+  "message": null }
+```
+
+L'ordre est fixé par l'API (identifiant ; saisies par jour ; clôtures du mois le plus récent au plus
+ancien). La recherche des saisies porte sur une période : `du` et `au` ensemble (bornes incluses,
+un an au plus, ex. `du=2026-01-01&au=2026-12-31`), ou le mois en cours s'ils sont absents. Une seule
+borne, une période inversée ou de plus d'un an renvoie 400.
+
+La description OpenAPI de l'API est publiée sur `/v3/api-docs`, avec l'interface Swagger UI sur
+`/swagger-ui.html` (bouton « Authorize » pour y coller un jeton) ; désactivées en production sauf
+`OPENAPI_ACTIVE=true`.
 
 Pour saisir des heures : `POST /api/saisies-temps` avec `tacheId` (une tâche du projet),
 éventuellement `utilisateurId` (par défaut l'utilisateur connecté), `duree` en heures (de 0,5 à 24, par pas de 0,5 : 1, 1.5, 7.5…), et éventuellement `jour`

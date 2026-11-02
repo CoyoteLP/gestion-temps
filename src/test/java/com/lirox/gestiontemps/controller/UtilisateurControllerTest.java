@@ -80,7 +80,7 @@ class UtilisateurControllerTest {
 		Utilisateur utilisateur = save("jdupont@lirox.com");
 		mockMvc.perform(get("/api/utilisateurs"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()").value(1));
+				.andExpect(jsonPath("$.data.contenu.length()").value(1));
 		mockMvc.perform(get("/api/utilisateurs/{id}", utilisateur.getId()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.nom").value("Dupont"));

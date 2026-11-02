@@ -27,6 +27,8 @@ import com.lirox.gestiontemps.common.Constantes;
  * Sécurité de l'API : jetons JWT émis par le fournisseur OIDC
  * ({@code spring.security.oauth2.resourceserver.jwt.issuer-uri}), sans session ni cookie.
  * <ul>
+ * <li>publics : la santé ({@code /actuator/health}) et la documentation OpenAPI (désactivée par
+ * défaut en production) ;</li>
  * <li>tout utilisateur authentifié peut lire ({@code GET}), gérer ses saisies de temps et demander
  * une clôture ; les règles fines (ses propres saisies, membres d'un projet) sont appliquées par les
  * services ;</li>
@@ -62,6 +64,8 @@ public class SecurityConfig {
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(requetes -> requetes
 						.requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+						.requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**")
+						.permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/**").authenticated()
 						.requestMatchers("/api/saisies-temps", "/api/saisies-temps/**").authenticated()
 						.requestMatchers(HttpMethod.POST, "/api/clotures", "/api/clotures/tous-projets").authenticated()

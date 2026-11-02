@@ -131,13 +131,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		return error(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur interne du serveur");
 	}
 
-	/** Liste les champs en erreur, triés par nom : "Requête invalide : code : ne doit pas être vide ; nom : ...". */
+	/**
+	 * Liste les champs en erreur, triés par nom : "Requête invalide : code : ne doit pas être vide ; nom : ...".
+	 * Une valeur impossible à convertir (paramètre {@code ?du=abc}) est signalée « format invalide ».
+	 */
 	@Override
 	protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
 			HttpHeaders headers, HttpStatusCode status, WebRequest request) {
 		String details = ex.getBindingResult().getFieldErrors().stream()
 				.sorted(Comparator.comparing(FieldError::getField))
-				.map(e -> e.getField() + " : " + e.getDefaultMessage())
+				.map(e -> e.getField() + " : " + (e.isBindingFailure() ? "format invalide" : e.getDefaultMessage()))
 				.collect(Collectors.joining(" ; "));
 		return detail(ex, "Requête invalide : " + details, headers, status, request);
 	}

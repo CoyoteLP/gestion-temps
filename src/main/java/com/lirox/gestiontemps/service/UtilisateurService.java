@@ -1,11 +1,12 @@
 package com.lirox.gestiontemps.service;
 
-import java.util.List;
-
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.lirox.gestiontemps.domain.Utilisateur;
+import com.lirox.gestiontemps.dto.PageResponse;
+import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.UtilisateurRequest;
 import com.lirox.gestiontemps.dto.UtilisateurResponse;
 import com.lirox.gestiontemps.exception.DuplicateResourceException;
@@ -32,10 +33,12 @@ public class UtilisateurService {
 	private final MembreProjetRepository membreProjetRepository;
 
 	/**
-	 * @return tous les utilisateurs
+	 * @param pagination page demandée
+	 * @return une page d'utilisateurs, par identifiant croissant
 	 */
-	public List<UtilisateurResponse> findAll() {
-		return utilisateurRepository.findAll().stream().map(UtilisateurResponse::from).toList();
+	public PageResponse<UtilisateurResponse> findAll(PaginationRequest pagination) {
+		return PageResponse.from(utilisateurRepository.findAll(pagination.versPageRequest(Sort.by("id"))),
+				UtilisateurResponse::from);
 	}
 
 	/**

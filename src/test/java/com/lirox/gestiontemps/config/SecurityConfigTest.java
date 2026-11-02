@@ -175,6 +175,18 @@ class SecurityConfigTest {
 	}
 
 	@Test
+	void laDocumentationOpenApiEstPubliqueEtDecritLAuthentification() throws Exception {
+		mockMvc.perform(get("/v3/api-docs"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.info.title").value("gestion-temps"))
+				.andExpect(jsonPath("$.components.securitySchemes['jeton-oidc'].scheme").value("bearer"))
+				.andExpect(jsonPath("$.paths['/api/saisies-temps'].get").exists())
+				.andExpect(jsonPath("$.paths['/api/clotures/tous-projets'].post").exists());
+		mockMvc.perform(get("/swagger-ui/index.html"))
+				.andExpect(status().isOk());
+	}
+
+	@Test
 	void laSanteEstPubliqueEtRienDAutre() throws Exception {
 		mockMvc.perform(get("/actuator/health"))
 				.andExpect(status().isOk());

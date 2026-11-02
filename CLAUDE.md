@@ -143,7 +143,11 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - `POST` → 201 + en-tête `Location` ; `DELETE` → 200 avec `data: null` et un message de confirmation.
   Exception : un `POST` qui crée plusieurs ressources d'un coup renvoie 201 avec leur liste (éventuellement
   vide) et un message, sans `Location` (voir `POST /api/clotures/tous-projets`).
-- Les filtres de liste sont des `@RequestParam(required = false)`.
+- Les filtres de liste sont des `@RequestParam(required = false)`, ou un record validé lu dans les
+  paramètres (`@Valid RechercheSaisiesRequest`) quand des règles portent sur plusieurs filtres.
+- Toute liste est paginée : paramètre `@Valid PaginationRequest pagination`, réponse
+  `ApiResponse<PageResponse<T>>` (`PageResponse.from(page, XxxResponse::from)`) ; le tri est imposé
+  par le service (`pagination.versPageRequest(Sort.by(...))`), jamais choisi par le client.
 
 ## Sécurité
 
