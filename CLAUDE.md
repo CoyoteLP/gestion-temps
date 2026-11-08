@@ -175,7 +175,7 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - Jamais de donnée personnelle ni de valeur de requête SQL dans un log (nom de contrainte, type
   d'exception, identifiant technique seulement).
 - Toute variable d'environnement de production est ajoutée sans valeur à `.env.example` (bloc
-  « Production uniquement ») et décrite dans le README (« Exploitation ») ; une variable facultative
+  « Production uniquement ») et décrite dans `docs/DEPLOIEMENT.md` (§ Variables d'environnement) ; une variable facultative
   a une valeur par défaut dans `application-prod.yml`, jamais un secret.
 - `GestionTempsApplicationProductionTest` démarre l'application en profil prod : toute nouvelle
   variable obligatoire de production y est ajoutée.
@@ -322,11 +322,17 @@ Changement incompatible de l'API : `!` après le type (`feat(api)!: …`).
   (`v0.1.0`) ; pas de suffixe `-SNAPSHOT`.
 - Changement de version sur `develop` : branche `chore/version-X.Y.Z` qui ne modifie que
   `pom.xml`, pull request intitulée `chore(release): version X.Y.Z`, fusion en squash.
-- **Avant 1.0.0** (phase actuelle) : pas de release ni de tag. `main` reste sur la version
-  d'initialisation (`0.0.1`) ; `develop` porte la version en cours (`0.1.0`, puis `0.2.0`…).
-- **À partir de 1.0.0** : chaque version passe par une `release/X.Y.Z` qui la fige, est fusionnée
-  dans `main` avec le tag `vX.Y.Z`, puis `develop` passe à la version mineure suivante (branche
-  `chore/version-…`) ; un `hotfix/*` augmente le correctif (`1.0.0` → `1.0.1`).
+- Chaque version passe par une `release/X.Y.Z` qui la fige (version du `pom.xml`, `CHANGELOG.md`,
+  documentation ; aucune nouveauté), est fusionnée dans `main` avec le tag `vX.Y.Z`, puis `develop`
+  passe à la version mineure suivante (branche `chore/version-…`) ; un `hotfix/*` augmente le
+  correctif (`1.0.0` → `1.0.1`) et suit le même circuit.
+- **Chaque passage en production** (`release/*` ou `hotfix/*` fusionnée dans `main`) : section
+  `## [X.Y.Z] - AAAA-MM-JJ` ajoutée dans `CHANGELOG.md` sur la branche de release, puis **release
+  GitHub** `vX.Y.Z` sur le tag, dont les notes reprennent cette section. Le CHANGELOG signale les
+  changements incompatibles, les nouvelles variables d'environnement et les migrations (avec leur
+  compatibilité en mise à jour progressive, voir `docs/DEPLOIEMENT.md`).
+- Le guide de déploiement (`docs/DEPLOIEMENT.md`) est mis à jour dans la PR qui change le
+  déploiement (variable, port, prérequis, procédure).
 
 ### Qualité
 
