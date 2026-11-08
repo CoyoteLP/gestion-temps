@@ -25,7 +25,8 @@ import com.lirox.gestiontemps.common.Constantes;
 /**
  * Démarrage complet de l'application avec la configuration de production
  * ({@code application-prod.yml}), sur de vrais ports : les variables d'environnement du déploiement
- * sont fournies comme propriétés (identifiants ignorés par Testcontainers). La base est un MariaDB Testcontainers vide, propre à cette classe
+ * sont fournies comme propriétés (identifiants ignorés par Testcontainers). La base est un
+ * MariaDB Testcontainers vide, propre à cette classe
  * ({@code TC_DAEMON} : le conteneur survit à la fermeture de la connexion des migrations, qui passent
  * par le compte Flyway distinct du profil prod).
  * <p>
