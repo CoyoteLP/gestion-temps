@@ -28,8 +28,8 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
-		<jacoco.version>0.8.13</jacoco.version>
-		<springdoc.version>3.1.1</springdoc.version>
+		<jacoco.version>0.8.16</jacoco.version>
+		<springdoc.version>3.2.0</springdoc.version>
 		<!-- Couverture minimale des lignes du paquet service, vérifiée par mvn verify -->
 		<couverture.service.minimum>0.90</couverture.service.minimum>
 	</properties>
