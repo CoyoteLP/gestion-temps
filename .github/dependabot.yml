@@ -1,0 +1,31 @@
+# Mises à jour des dépendances : Dependabot ouvre des pull requests vers develop, une fois par
+# semaine, en regroupant les mises à jour mineures et correctives pour limiter leur nombre.
+# Les correctifs de sécurité sont proposés dès leur publication, indépendamment de ce planning
+# (alertes Dependabot à activer dans les paramètres du dépôt).
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      maven-mineures:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ['*']

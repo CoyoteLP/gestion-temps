@@ -61,6 +61,24 @@ public final class Constantes {
 	/** Étendue maximale d'une recherche de saisies (de {@code du} à {@code au} inclus), en années. */
 	public static final int DUREE_MAX_RECHERCHE_ANNEES = 1;
 
+	/**
+	 * En-tête HTTP de l'identifiant de corrélation d'une requête : repris de la requête s'il est
+	 * valide, sinon généré, et renvoyé dans la réponse pour retrouver les logs d'un appel.
+	 */
+	public static final String EN_TETE_CORRELATION = "X-Correlation-Id";
+
+	/**
+	 * Clé de l'identifiant de corrélation dans le contexte des logs (MDC) : champ des logs JSON, et
+	 * repris par {@code logging.pattern.correlation} dans {@code application.yml}.
+	 */
+	public static final String CLE_LOG_CORRELATION = "correlationId";
+
+	/**
+	 * Format accepté d'un identifiant de corrélation reçu : court, sans espace ni retour à la ligne
+	 * qui permettrait de falsifier une ligne de log.
+	 */
+	public static final String FORMAT_IDENTIFIANT_CORRELATION = "[A-Za-z0-9._-]{1,64}";
+
 	private Constantes() {
 	}
 

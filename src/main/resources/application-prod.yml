@@ -5,6 +5,39 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+    hikari:
+      pool-name: gestion-temps
+      # Connexions simultanées à MariaDB, par instance de l'API
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      # Attente maximale d'une connexion libre (ms) : au-delà, la requête échoue au lieu de s'accumuler
+      connection-timeout: 10000
+  # Compte des migrations : peut avoir des droits de modification du schéma (DDL) refusés au compte
+  # de l'application, qui n'a alors besoin que de lire et d'écrire les données ; par défaut, le même
+  flyway:
+    user: ${FLYWAY_USERNAME:${DB_USERNAME}}
+    password: ${FLYWAY_PASSWORD:${DB_PASSWORD}}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI}
+          audiences: ${OIDC_AUDIENCE}
+
+# Logs JSON structurés (Elastic Common Schema), une ligne par événement, lisibles par la plupart des
+# outils de collecte (Elastic, Loki, Datadog…)
+logging:
+  structured:
+    format:
+      console: ecs
+
+# Actuator sur un port séparé, que seul le réseau interne doit atteindre (sondes, Prometheus) ;
+# il n'exige pas de jeton
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+  endpoint:
+    health:
+      show-components: always
 
 # Documentation OpenAPI (/v3/api-docs, /swagger-ui.html) : désactivée en production sauf OPENAPI_ACTIVE=true
 springdoc:
@@ -12,9 +45,3 @@ springdoc:
     enabled: ${OPENAPI_ACTIVE:false}
   swagger-ui:
     enabled: ${OPENAPI_ACTIVE:false}
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${OIDC_ISSUER_URI}
-          audiences: ${OIDC_AUDIENCE}

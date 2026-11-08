@@ -9,9 +9,19 @@ spring:
     # Hibernate vérifie au démarrage que les entités correspondent, dans tous les profils.
     hibernate:
       ddl-auto: validate
+  # Arrêt gracieux : à l'arrêt, les requêtes en cours disposent de ce délai pour se terminer
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
 
 server:
   port: 8080
+  shutdown: graceful
+
+logging:
+  pattern:
+    # Identifiant de corrélation de la requête (en-tête X-Correlation-Id) dans chaque ligne de log ;
+    # dans les logs JSON de production, il figure dans le champ correlationId
+    correlation: "[%X{correlationId:-}] "
 
 gestion-temps:
   securite:
@@ -22,8 +32,20 @@ gestion-temps:
     # false que si le fournisseur ne transmet pas cette revendication et garantit lui-même les emails.
     exiger-email-verifie: ${OIDC_EXIGER_EMAIL_VERIFIE:true}
 
+# Actuator : santé, informations de version et métriques. En production, servi sur un port de
+# gestion séparé (application-prod.yml), à ne pas exposer hors du réseau interne ; sur le port de
+# l'API (dev, test), seule la santé est publique, le reste est réservé au rôle ADMIN (SecurityConfig).
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+  endpoint:
+    health:
+      # Sondes /actuator/health/liveness (l'application tourne) et /actuator/health/readiness
+      # (elle peut recevoir du trafic : base de données joignable)
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
