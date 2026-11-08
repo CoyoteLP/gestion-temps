@@ -38,14 +38,13 @@ recréée une fois : `DROP DATABASE gestion_temps;` puis relancer l'application 
 développement sont perdues).
 
 - API : http://localhost:8080
-- Santé : http://localhost:8080/actuator/health
+- Santé : http://localhost:8080/actuator/health (métriques et informations : jeton administrateur)
 
 Les tests (`./mvnw test`) utilisent une base MariaDB démarrée automatiquement dans un conteneur
 (Testcontainers) : Docker doit être lancé, mais ni MariaDB locale ni `.env` ne sont nécessaires.
 `./mvnw verify` vérifie en plus la couverture de tests (rapport : `target/site/jacoco/index.html`).
 
-En production : `SPRING_PROFILES_ACTIVE=prod` avec `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`,
-`OIDC_ISSUER_URI` et `OIDC_AUDIENCE` (voir « Authentification et droits »).
+En production : voir « Exploitation ».
 
 ## Contribuer
 
@@ -157,7 +156,7 @@ déjà clôturé renvoie 409.
 
 ## Authentification et droits
 
-Toutes les requêtes (sauf `/actuator/health`) exigent un jeton d'accès OIDC dans l'en-tête
+Toutes les requêtes (sauf la santé et la documentation, voir « Exploitation ») exigent un jeton d'accès OIDC dans l'en-tête
 `Authorization: Bearer <jeton>`, émis par le fournisseur configuré dans `OIDC_ISSUER_URI` (l'API ne
 gère aucun mot de passe) et destiné à l'API : sa revendication `aud` doit contenir `OIDC_AUDIENCE`
 (ex. `gestion-temps-api`), un jeton émis pour une autre application du même fournisseur est refusé.
@@ -237,6 +236,66 @@ et de la dernière modification (instants UTC ; auteur = email du jeton, ou iden
 Une suppression renvoie 200 avec `data: null` et un message de confirmation. Une erreur de
 validation (400) liste les champs en cause dans `message`, par exemple
 `"Requête invalide : code : ne doit pas être vide ; nom : ne doit pas être vide"`.
+
+Chaque réponse porte un en-tête `X-Correlation-Id` : l'identifiant de la requête, repris dans
+toutes ses lignes de log. Un client ou un reverse proxy peut le fournir dans la requête (lettres,
+chiffres, `.`, `_`, `-`, 64 caractères au plus ; sinon l'API en génère un). Le communiquer en cas
+d'erreur permet de retrouver les logs de l'appel.
+
+## Exploitation
+
+### Image conteneur
+
+```bash
+./mvnw spring-boot:build-image      # image gestion-temps:<version> (buildpacks Paketo, Java 21)
+```
+
+L'image démarre en profil `prod` et dans le fuseau `Europe/Paris` (remplaçables par
+`SPRING_PROFILES_ACTIVE` et `TZ`) ; la mémoire de la JVM est calculée d'après la limite du
+conteneur. Arrêt gracieux : à l'arrêt (`SIGTERM`), les requêtes en cours disposent de 20 s pour
+se terminer.
+
+### Variables d'environnement (profil `prod`)
+
+| Variable | Obligatoire | Rôle |
+|----------|-------------|------|
+| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | oui | connexion MariaDB 11.4 de l'application |
+| `OIDC_ISSUER_URI`, `OIDC_AUDIENCE` | oui | émetteur et destinataire des jetons (voir « Authentification et droits ») |
+| `FLYWAY_USERNAME`, `FLYWAY_PASSWORD` | non | compte des migrations, au démarrage (par défaut : celui de l'application) ; permet de n'accorder à l'application que la lecture et l'écriture des données |
+| `DB_POOL_MAX` | non | connexions simultanées à la base par instance (10 par défaut) |
+| `MANAGEMENT_PORT` | non | port d'Actuator (8081 par défaut) |
+| `OIDC_ROLES_CLAIM`, `OIDC_EXIGER_EMAIL_VERIFIE` | non | voir « Authentification et droits » |
+| `OPENAPI_ACTIVE` | non | `true` pour publier la documentation OpenAPI (désactivée par défaut) |
+
+### Santé et métriques
+
+En production, Actuator est servi sur un **port séparé** (`MANAGEMENT_PORT`, 8081), sans jeton :
+ce port ne doit être joignable que du réseau interne (orchestrateur, Prometheus), jamais publié
+par le reverse proxy. Le port de l'API (8080) ne sert alors aucun point Actuator.
+
+| Point | Usage |
+|-------|-------|
+| `/actuator/health/liveness` | sonde de vie : l'application tourne (redémarrer sinon) |
+| `/actuator/health/readiness` | sonde de disponibilité : prête à recevoir du trafic, base de données joignable |
+| `/actuator/prometheus` | métriques au format Prometheus (JVM, requêtes HTTP, pool de connexions…) |
+| `/actuator/info` | version de l'application |
+
+En dev, Actuator reste sur le port de l'API : la santé est publique, le reste exige un jeton
+administrateur.
+
+### Logs
+
+En production, les logs sont écrits sur la sortie standard en JSON (Elastic Common Schema), une
+ligne par événement, avec l'identifiant de corrélation de la requête dans le champ
+`correlationId`. En dev, ils restent lisibles (identifiant entre crochets) et les requêtes SQL
+d'Hibernate sont tracées (niveau `debug` de `org.hibernate.SQL`).
+
+### Analyses de sécurité
+
+- **Dependabot** (`.github/dependabot.yml`) propose chaque semaine les mises à jour des
+  dépendances Maven et des actions GitHub, par pull request vers `develop`.
+- **CodeQL** (`.github/workflows/codeql.yml`) analyse le code à chaque pull request et chaque
+  semaine ; résultats dans l'onglet *Security* du dépôt.
 
 ## Structure
 

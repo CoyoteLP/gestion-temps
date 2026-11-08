@@ -9,8 +9,6 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
-  jpa:
-    show-sql: true
   security:
     oauth2:
       resourceserver:
@@ -19,3 +17,8 @@ spring:
           issuer-uri: ${OIDC_ISSUER_URI}
           # Destinataire attendu (revendication aud) : refuse les jetons émis pour d'autres applications
           audiences: ${OIDC_AUDIENCE}
+
+logging:
+  level:
+    # Requêtes SQL émises par Hibernate (sans les valeurs des paramètres)
+    org.hibernate.SQL: debug

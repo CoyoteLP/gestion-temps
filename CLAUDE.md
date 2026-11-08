@@ -11,6 +11,7 @@ vont dans `CLAUDE.local.md` (non versionné).
 ./mvnw test -Dtest=SaisieTempsControllerTest        # une classe de test
 ./mvnw spring-boot:run                              # profil dev (MariaDB locale)
 docker compose -f docker/keycloak/compose.yaml up -d  # Keycloak de dev (jetons : docker/keycloak/jeton.sh)
+./mvnw spring-boot:build-image                      # image conteneur (buildpacks), profil prod par défaut
 ```
 
 Lancer `./mvnw test` après toute modification et avant de déclarer une tâche terminée.
@@ -162,6 +163,22 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - Un utilisateur est identifié par la revendication `sub` (colonne `utilisateur.sujet`), rattachée
   une fois par l'email du jeton, seulement s'il est déclaré vérifié (`email_verified`, voir
   `ProprietesSecurite.exigerEmailVerifie`).
+- Actuator : en prod, sur un port de gestion séparé (`MANAGEMENT_PORT`) sans jeton, réservé au
+  réseau interne ; sur le port de l'API (dev, test), santé publique et autres points réservés à
+  l'administrateur. Tout nouveau point Actuator exposé suit cette règle (`SecurityConfig`).
+
+## Exploitation
+
+- Logs : SLF4J ; JSON ECS en prod (`logging.structured.format.console`). Chaque requête porte un
+  identifiant de corrélation (`IdentifiantCorrelationFilter`, en-tête `X-Correlation-Id`, clé MDC
+  `correlationId`) : ne pas le recréer dans le code, il est présent dans toutes les lignes de log.
+- Jamais de donnée personnelle ni de valeur de requête SQL dans un log (nom de contrainte, type
+  d'exception, identifiant technique seulement).
+- Toute variable d'environnement de production est ajoutée sans valeur à `.env.example` (bloc
+  « Production uniquement ») et décrite dans le README (« Exploitation ») ; une variable facultative
+  a une valeur par défaut dans `application-prod.yml`, jamais un secret.
+- `GestionTempsApplicationProductionTest` démarre l'application en profil prod : toute nouvelle
+  variable obligatoire de production y est ajoutée.
 
 ## Format des réponses et gestion des erreurs
 

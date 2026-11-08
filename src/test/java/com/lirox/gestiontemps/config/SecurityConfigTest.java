@@ -186,12 +186,36 @@ class SecurityConfigTest {
 				.andExpect(status().isOk());
 	}
 
-	@Test
-	void laSanteEstPubliqueEtRienDAutre() throws Exception {
-		mockMvc.perform(get("/actuator/health"))
-				.andExpect(status().isOk());
-		mockMvc.perform(get("/actuator/info"))
+	// Actuator sur le port de l'API (profil test) : santé publique, le reste réservé aux administrateurs ;
+	// le port de gestion séparé de la production est testé par GestionTempsApplicationProductionTest
+
+	@ParameterizedTest
+	@ValueSource(strings = { "/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness" })
+	void laSanteEstPublique(String url) throws Exception {
+		mockMvc.perform(get(url))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("UP"));
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "/actuator/info", "/actuator/prometheus" })
+	void lesAutresPointsActuatorExigentUnJeton(String url) throws Exception {
+		mockMvc.perform(get(url))
 				.andExpect(status().isUnauthorized());
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "/actuator/info", "/actuator/prometheus" })
+	void lesAutresPointsActuatorSontRefusesAuxCollaborateurs(String url) throws Exception {
+		mockMvc.perform(get(url).with(jwt()))
+				.andExpect(status().isForbidden());
+	}
+
+	/** Prometheus n'est pas activé dans les tests MockMvc (export des métriques désactivé par Spring Boot). */
+	@Test
+	void unAdministrateurLitLesPointsActuator() throws Exception {
+		mockMvc.perform(get("/actuator/info").with(JetonsDeTest.admin()))
+				.andExpect(status().isOk());
 	}
 
 	@ParameterizedTest

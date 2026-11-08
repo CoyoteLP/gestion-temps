@@ -5,10 +5,14 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.actuate.autoconfigure.web.server.ManagementPortType;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authorization.AuthorityAuthorizationManager;
+import org.springframework.security.authorization.SingleResultAuthorizationManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
@@ -29,6 +33,9 @@ import com.lirox.gestiontemps.common.Constantes;
  * <ul>
  * <li>publics : la santé ({@code /actuator/health}) et la documentation OpenAPI (désactivée par
  * défaut en production) ;</li>
+ * <li>autres points Actuator (informations, métriques Prometheus) : publics s'ils sont servis sur un
+ * port de gestion séparé ({@code management.server.port}, production), que seul le réseau interne
+ * atteint ; réservés au rôle {@link Constantes#ROLE_ADMIN} sur le port de l'API ;</li>
  * <li>tout utilisateur authentifié peut lire ({@code GET}), gérer ses saisies de temps et demander
  * une clôture ; les règles fines (ses propres saisies, membres d'un projet) sont appliquées par les
  * services ;</li>
@@ -48,12 +55,15 @@ public class SecurityConfig {
 	 * @param http              configuration HTTP de Spring Security
 	 * @param proprietes        paramètres de sécurité de l'application
 	 * @param exceptionResolver résolveur de Spring MVC, pour traiter 401 et 403 comme les autres erreurs
+	 * @param environment       configuration, pour savoir si Actuator a son propre port
 	 * @return la chaîne de filtres de sécurité
 	 * @throws Exception si la configuration est invalide
 	 */
 	@Bean
 	SecurityFilterChain securityFilterChain(HttpSecurity http, ProprietesSecurite proprietes,
-			@Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver) throws Exception {
+			@Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver, Environment environment)
+			throws Exception {
+		boolean portDeGestionSepare = ManagementPortType.get(environment) == ManagementPortType.DIFFERENT;
 		AuthenticationEntryPoint authentificationRequise = authentificationRequise(exceptionResolver);
 		AccessDeniedHandler accesRefuse = (request, response, ex) -> exceptionResolver.resolveException(request,
 				response, null, ex);
@@ -64,6 +74,9 @@ public class SecurityConfig {
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(requetes -> requetes
 						.requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+						.requestMatchers("/actuator/**").access(portDeGestionSepare
+								? SingleResultAuthorizationManager.permitAll()
+								: AuthorityAuthorizationManager.hasRole(Constantes.ROLE_ADMIN))
 						.requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**")
 						.permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/**").authenticated()
