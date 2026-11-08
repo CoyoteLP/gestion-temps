@@ -19,19 +19,23 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.lirox.gestiontemps.JetonsDeTest;
 import com.lirox.gestiontemps.domain.Utilisateur;
+import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.repository.UtilisateurRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
+@Import(JetonsDeTest.AdministrateurParDefaut.class)
 class UtilisateurControllerTest {
 
 	@Autowired
@@ -76,7 +80,7 @@ class UtilisateurControllerTest {
 		Utilisateur utilisateur = save("jdupont@lirox.com");
 		mockMvc.perform(get("/api/utilisateurs"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()").value(1));
+				.andExpect(jsonPath("$.data.contenu.length()").value(1));
 		mockMvc.perform(get("/api/utilisateurs/{id}", utilisateur.getId()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.nom").value("Dupont"));
@@ -87,11 +91,54 @@ class UtilisateurControllerTest {
 		Utilisateur utilisateur = save("jdupont@lirox.com");
 		mockMvc.perform(put("/api/utilisateurs/{id}", utilisateur.getId()).contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"email": "jdupont@lirox.com", "nom": "Durand", "prenom": "Jean", "actif": false}
+						{"version": 0, "email": "jdupont@lirox.com", "nom": "Durand", "prenom": "Jean", "actif": false}
 						"""))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.nom").value("Durand"))
 				.andExpect(jsonPath("$.data.actif").value(false));
+	}
+
+	@Test
+	void updateIncrementeLaVersion() throws Exception {
+		Utilisateur utilisateur = save("jdupont@lirox.com");
+		mockMvc.perform(put("/api/utilisateurs/{id}", utilisateur.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "email": "jdupont@lirox.com", "nom": "Durand", "prenom": "Jean"}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.version").value(1));
+	}
+
+	@Test
+	void updateRefuseUneVersionPerimee() throws Exception {
+		Utilisateur utilisateur = save("jdupont@lirox.com");
+		mockMvc.perform(put("/api/utilisateurs/{id}", utilisateur.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "email": "jdupont@lirox.com", "nom": "Durand", "prenom": "Jean"}
+						"""))
+				.andExpect(status().isOk());
+		mockMvc.perform(put("/api/utilisateurs/{id}", utilisateur.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "email": "jdupont@lirox.com", "nom": "Martin", "prenom": "Jean"}
+						"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value(ModificationConcurrenteException.MESSAGE));
+		mockMvc.perform(get("/api/utilisateurs/{id}", utilisateur.getId()))
+				.andExpect(jsonPath("$.data.nom").value("Durand"))
+				.andExpect(jsonPath("$.data.version").value(1));
+	}
+
+	@Test
+	void updateRefuseUneRequeteSansVersion() throws Exception {
+		Utilisateur utilisateur = save("jdupont@lirox.com");
+		mockMvc.perform(put("/api/utilisateurs/{id}", utilisateur.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"email": "jdupont@lirox.com", "nom": "Durand", "prenom": "Jean"}
+						"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value("Requête invalide : version : est obligatoire en modification"));
+		mockMvc.perform(get("/api/utilisateurs/{id}", utilisateur.getId()))
+				.andExpect(jsonPath("$.data.version").value(0));
 	}
 
 	@Test
@@ -109,7 +156,7 @@ class UtilisateurControllerTest {
 		Utilisateur utilisateur = save("pmartin@lirox.com");
 		mockMvc.perform(put("/api/utilisateurs/{id}", utilisateur.getId()).contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"email": "jdupont@lirox.com", "nom": "Martin", "prenom": "Paul"}
+						{"version": 0, "email": "jdupont@lirox.com", "nom": "Martin", "prenom": "Paul"}
 						"""))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.message").value("Un utilisateur avec l'email 'jdupont@lirox.com' existe déjà"));
@@ -123,7 +170,7 @@ class UtilisateurControllerTest {
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.message").value("Utilisateur introuvable (id=9999)"));
 		mockMvc.perform(put("/api/utilisateurs/{id}", 9999).contentType(MediaType.APPLICATION_JSON).content("""
-				{"email": "jdupont@lirox.com", "nom": "Dupont", "prenom": "Jean"}
+				{"version": 0, "email": "jdupont@lirox.com", "nom": "Dupont", "prenom": "Jean"}
 				"""))
 				.andExpect(status().isNotFound());
 		mockMvc.perform(delete("/api/utilisateurs/{id}", 9999))

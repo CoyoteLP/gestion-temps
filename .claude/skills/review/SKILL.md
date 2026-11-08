@@ -54,8 +54,9 @@ rappel ; en cas de divergence, `CLAUDE.md` fait foi.
 **Entités et base de données**
 - Lombok `@Getter @Setter @NoArgsConstructor`, jamais `@Data`.
 - `@ManyToOne(fetch = FetchType.LAZY, optional = false)` + `@JoinColumn` explicite.
-- Nouvelle entité ou colonne → migration du schéma de production à prévoir (profil `prod` en
-  `ddl-auto: validate`) : le signaler.
+- Nouvelle entité, colonne, contrainte ou index → nouveau script Flyway `V<n>__….sql` dans la même
+  PR (*Bloquant* s'il manque : l'application ne démarre plus, `ddl-auto: validate`).
+- Script Flyway déjà fusionné modifié → *Bloquant* (la somme de contrôle ne correspond plus en production).
 
 **Règles métier** (voir la section dédiée de `CLAUDE.md`)
 - Une modification ne doit pas contourner une règle existante : suppression d'une ressource
@@ -111,10 +112,14 @@ jusqu'à son utilisation, et vérifier qu'elle ne peut pas détourner le comport
   `application*.yml` versionnés : variables d'environnement uniquement.
 
 **Contrôle d'accès**
-- L'API n'a pas encore d'authentification : tout appelant peut lire et modifier toutes les
-  données. Ne pas le re-signaler à chaque revue, mais signaler en *Bloquant* toute modification qui
-  suppose un contrôle d'accès inexistant (ex. « un utilisateur ne voit que ses saisies ») ou qui
-  expose un nouvel endpoint d'administration ou de données personnelles.
+- Tout nouvel endpoint est couvert par `SecurityConfig` : écriture de référentiel réservée au rôle
+  administrateur, lecture authentifiée ; *Bloquant* s'il est public ou ouvert à tort.
+- Une règle « ses propres données » ou « membre du projet » est vérifiée dans le service avec
+  `UtilisateurCourantService` et `AccesRefuseException` ; *Bloquant* si elle manque, ou si un
+  identifiant d'utilisateur fourni par le client est cru sans contrôle (ex. `utilisateurId` d'un
+  collaborateur différent du sien).
+- Chaque règle d'accès a un test du rôle autorisé et d'un rôle refusé (403), et un test sans jeton
+  (401) pour un nouvel endpoint.
 
 **Dépendances**
 - Nouvelle dépendance dans `pom.xml` : version explicite ou gérée par le parent Spring Boot, pas de
@@ -150,8 +155,8 @@ volume de données.
 - Liste renvoyée sans limite (`findAll()` exposé tel quel) sur une table appelée à grossir
   (`saisie_temps`) : le signaler en *Suggestion* avec une pagination (`Pageable`) ou un filtre
   obligatoire.
-- Colonne utilisée en filtre fréquent (`jour`, clés étrangères) sans index : le signaler pour la
-  migration du schéma de production.
+- Colonne utilisée en filtre fréquent (`jour`, clés étrangères) sans index : proposer l'index
+  dans un script Flyway.
 
 **Transactions**
 - Lecture seule : `@Transactional(readOnly = true)` (hérité de la classe de service).

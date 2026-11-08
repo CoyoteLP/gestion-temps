@@ -2,8 +2,11 @@ package com.lirox.gestiontemps.dto;
 
 import java.time.LocalDate;
 
+import com.lirox.gestiontemps.validation.Modification;
+
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -15,6 +18,8 @@ import jakarta.validation.constraints.Size;
  * @param dateDebut   date de début prévue, optionnelle
  * @param dateFin     date de fin prévue, optionnelle
  * @param actif       état du projet ; null = actif
+ * @param version     version lue avant modification, obligatoire en modification et ignorée
+ *                    en création ; un écart avec la version en base renvoie 409
  */
 public record ProjetRequest(
 		@NotBlank @Size(max = 20) String code,
@@ -22,7 +27,8 @@ public record ProjetRequest(
 		@Size(max = 1000) String description,
 		LocalDate dateDebut,
 		LocalDate dateFin,
-		Boolean actif) {
+		Boolean actif,
+		@NotNull(groups = Modification.class, message = "est obligatoire en modification") Long version) {
 
 	/**
 	 * Règle de validation inter-champs (exposée sous le nom {@code periodeValide}).

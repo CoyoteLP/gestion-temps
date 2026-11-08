@@ -1,0 +1,45 @@
+# Analyse de sécurité du code Java (CodeQL) : injections, désérialisation, fuites de données…
+# Résultats dans l'onglet Security > Code scanning du dépôt ; une alerte n'empêche pas la fusion.
+name: CodeQL
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Chaque lundi à 5 h UTC : de nouvelles règles peuvent révéler un problème dans un code inchangé
+    - cron: '0 5 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyse:
+    name: Analyse CodeQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      # Analyse sans compilation : pas de dépendance au build Maven ni à Docker
+      - name: Initialiser CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: java-kotlin
+          build-mode: none
+          queries: security-extended
+
+      - name: Analyser
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:java-kotlin

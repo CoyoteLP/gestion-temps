@@ -8,6 +8,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -20,11 +21,16 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-public class Projet {
+public class Projet extends EntiteAuditee {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
+
+	/** Version pour le verrouillage optimiste, incrémentée par Hibernate à chaque modification. */
+	@Version
+	@Column(nullable = false)
+	private Long version;
 
 	/** Code court et unique du projet (ex. "PRJ-01"). */
 	@Column(nullable = false, unique = true, length = 20)

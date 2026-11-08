@@ -1,9 +1,15 @@
-# Profil de test : base H2 en mémoire, indépendante de MariaDB
+# Profil de test : MariaDB dans un conteneur Docker démarré par Testcontainers (URL jdbc:tc:),
+# partagé par toute la suite ; Docker doit être lancé. Aucune MariaDB locale ni .env requis.
+# Le schéma est créé par les migrations Flyway, comme en production.
 spring:
   datasource:
-    url: jdbc:h2:mem:gestiontemps-test;MODE=MariaDB;DB_CLOSE_DELAY=-1
-    username: sa
-    password:
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
+    url: jdbc:tc:mariadb:11.4:///gestion_temps
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Jamais contacté : les tests fournissent leurs jetons avec jwt() de spring-security-test, ou
+          # signent de vrais jetons avec une clé générée au démarrage (SecurityConfigTest)
+          issuer-uri: https://oidc.invalid/test
+          audiences: gestion-temps-api

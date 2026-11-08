@@ -1,10 +1,9 @@
 package com.lirox.gestiontemps.controller;
 
 import java.net.URI;
-import java.time.LocalDate;
-import java.util.List;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -12,16 +11,20 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.lirox.gestiontemps.dto.ApiResponse;
+import com.lirox.gestiontemps.dto.PageResponse;
+import com.lirox.gestiontemps.dto.PaginationRequest;
+import com.lirox.gestiontemps.dto.RechercheSaisiesRequest;
 import com.lirox.gestiontemps.dto.SaisieTempsRequest;
 import com.lirox.gestiontemps.dto.SaisieTempsResponse;
 import com.lirox.gestiontemps.service.SaisieTempsService;
+import com.lirox.gestiontemps.validation.Modification;
 
 import jakarta.validation.Valid;
+import jakarta.validation.groups.Default;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -35,21 +38,19 @@ public class SaisieTempsController {
 	private final SaisieTempsService saisieTempsService;
 
 	/**
-	 * {@code GET /api/saisies-temps?utilisateurId=&tacheId=&du=&au=} : recherche de saisies.
+	 * {@code GET /api/saisies-temps?utilisateurId=&projetId=&tacheId=&du=&au=&page=&taille=} : recherche
+	 * paginée de saisies, sur le mois en cours sans {@code du} ni {@code au}. Un collaborateur obtient
+	 * ses saisies, ou celles d'un projet dont il est membre.
 	 *
-	 * @param utilisateurId filtre optionnel sur l'utilisateur
-	 * @param tacheId       filtre optionnel sur la tâche
-	 * @param du            filtre optionnel : à partir de ce jour (inclus, format AAAA-MM-JJ)
-	 * @param au            filtre optionnel : jusqu'à ce jour (inclus, format AAAA-MM-JJ)
-	 * @return les saisies correspondantes, triées par jour
+	 * @param filtres    utilisateur, projet, tâche (optionnels) et période (format AAAA-MM-JJ, bornes
+	 *                   incluses, au plus un an ; 400 si une seule borne, inversée ou trop longue)
+	 * @param pagination page demandée (à partir de 1) et taille
+	 * @return une page de saisies, triées par jour
 	 */
 	@GetMapping
-	public ApiResponse<List<SaisieTempsResponse>> search(
-			@RequestParam(required = false) Long utilisateurId,
-			@RequestParam(required = false) Long tacheId,
-			@RequestParam(required = false) LocalDate du,
-			@RequestParam(required = false) LocalDate au) {
-		return ApiResponse.success(saisieTempsService.search(utilisateurId, tacheId, du, au));
+	public ApiResponse<PageResponse<SaisieTempsResponse>> search(@Valid RechercheSaisiesRequest filtres,
+			@Valid PaginationRequest pagination) {
+		return ApiResponse.success(saisieTempsService.search(filtres, pagination));
 	}
 
 	/**
@@ -81,12 +82,12 @@ public class SaisieTempsController {
 	 * {@code PUT /api/saisies-temps/{id}} : modification d'une saisie (422 si une règle métier est enfreinte).
 	 *
 	 * @param id      identifiant de la saisie
-	 * @param request nouvelles données
+	 * @param request nouvelles données, avec la version lue (400 si absente, 409 si périmée)
 	 * @return la saisie modifiée
 	 */
 	@PutMapping("/{id}")
 	public ApiResponse<SaisieTempsResponse> update(@PathVariable Long id,
-			@Valid @RequestBody SaisieTempsRequest request) {
+			@Validated({ Default.class, Modification.class }) @RequestBody SaisieTempsRequest request) {
 		return ApiResponse.success(saisieTempsService.update(id, request));
 	}
 

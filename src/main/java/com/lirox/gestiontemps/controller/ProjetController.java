@@ -1,9 +1,9 @@
 package com.lirox.gestiontemps.controller;
 
 import java.net.URI;
-import java.util.List;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,11 +15,15 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.lirox.gestiontemps.dto.ApiResponse;
+import com.lirox.gestiontemps.dto.PageResponse;
+import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.ProjetRequest;
 import com.lirox.gestiontemps.dto.ProjetResponse;
 import com.lirox.gestiontemps.service.ProjetService;
+import com.lirox.gestiontemps.validation.Modification;
 
 import jakarta.validation.Valid;
+import jakarta.validation.groups.Default;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -33,13 +37,14 @@ public class ProjetController {
 	private final ProjetService projetService;
 
 	/**
-	 * {@code GET /api/projets} : liste des projets.
+	 * {@code GET /api/projets?page=&taille=} : liste paginée des projets.
 	 *
-	 * @return tous les projets
+	 * @param pagination page demandée (à partir de 1) et taille
+	 * @return une page de projets
 	 */
 	@GetMapping
-	public ApiResponse<List<ProjetResponse>> findAll() {
-		return ApiResponse.success(projetService.findAll());
+	public ApiResponse<PageResponse<ProjetResponse>> findAll(@Valid PaginationRequest pagination) {
+		return ApiResponse.success(projetService.findAll(pagination));
 	}
 
 	/**
@@ -71,11 +76,12 @@ public class ProjetController {
 	 * {@code PUT /api/projets/{id}} : modification d'un projet.
 	 *
 	 * @param id      identifiant du projet
-	 * @param request nouvelles données
+	 * @param request nouvelles données, avec la version lue (400 si absente, 409 si périmée)
 	 * @return le projet modifié
 	 */
 	@PutMapping("/{id}")
-	public ApiResponse<ProjetResponse> update(@PathVariable Long id, @Valid @RequestBody ProjetRequest request) {
+	public ApiResponse<ProjetResponse> update(@PathVariable Long id,
+			@Validated({ Default.class, Modification.class }) @RequestBody ProjetRequest request) {
 		return ApiResponse.success(projetService.update(id, request));
 	}
 

@@ -1,7 +1,7 @@
 package com.lirox.gestiontemps.repository;
 
-import java.util.List;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.lirox.gestiontemps.domain.Tache;
@@ -13,9 +13,10 @@ public interface TacheRepository extends JpaRepository<Tache, Long> {
 
 	/**
 	 * @param projetId identifiant du projet
-	 * @return les tâches du projet
+	 * @param page     page et tri demandés
+	 * @return la page de tâches du projet
 	 */
-	List<Tache> findByProjetId(Long projetId);
+	Page<Tache> findByProjetId(Long projetId, Pageable page);
 
 	/**
 	 * @param projetId identifiant du projet

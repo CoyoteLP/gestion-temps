@@ -1,14 +1,18 @@
 package com.lirox.gestiontemps.service;
 
-import java.util.List;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.domain.Tache;
+import com.lirox.gestiontemps.dto.PageResponse;
+import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.TacheRequest;
 import com.lirox.gestiontemps.dto.TacheResponse;
+import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.exception.ResourceInUseException;
 import com.lirox.gestiontemps.exception.ResourceNotFoundException;
 import com.lirox.gestiontemps.repository.ProjetRepository;
@@ -31,12 +35,15 @@ public class TacheService {
 	private final SaisieTempsRepository saisieTempsRepository;
 
 	/**
-	 * @param projetId restreint aux tâches de ce projet ; null = toutes les tâches
-	 * @return les tâches correspondantes
+	 * @param projetId   restreint aux tâches de ce projet ; null = toutes les tâches
+	 * @param pagination page demandée
+	 * @return une page de tâches, par identifiant croissant
 	 */
-	public List<TacheResponse> findAll(Long projetId) {
-		List<Tache> taches = projetId == null ? tacheRepository.findAll() : tacheRepository.findByProjetId(projetId);
-		return taches.stream().map(TacheResponse::from).toList();
+	public PageResponse<TacheResponse> findAll(Long projetId, PaginationRequest pagination) {
+		PageRequest page = pagination.versPageRequest(Sort.by("id"));
+		Page<Tache> taches = projetId == null ? tacheRepository.findAll(page)
+				: tacheRepository.findByProjetId(projetId, page);
+		return PageResponse.from(taches, TacheResponse::from);
 	}
 
 	/**
@@ -65,11 +72,14 @@ public class TacheService {
 	 * @param request nouvelles données
 	 * @return la tâche modifiée
 	 * @throws ResourceNotFoundException si la tâche ou le projet n'existe pas
+	 * @throws ModificationConcurrenteException si la version envoyée n'est plus celle en base
 	 */
 	@Transactional
 	public TacheResponse update(Long id, TacheRequest request) {
 		Tache tache = getTache(id);
+		VerrouOptimiste.verifier(tache.getVersion(), request.version());
 		apply(request, tache);
+		tacheRepository.flush();
 		return TacheResponse.from(tache);
 	}
 

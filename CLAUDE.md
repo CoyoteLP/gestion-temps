@@ -7,9 +7,11 @@ vont dans `CLAUDE.local.md` (non versionné).
 ## Commandes
 
 ```bash
-./mvnw test                                         # tous les tests (H2 en mémoire, sans MariaDB)
+./mvnw test                                         # tous les tests (MariaDB via Testcontainers : Docker lancé)
 ./mvnw test -Dtest=SaisieTempsControllerTest        # une classe de test
 ./mvnw spring-boot:run                              # profil dev (MariaDB locale)
+docker compose -f docker/keycloak/compose.yaml up -d  # Keycloak de dev (jetons : docker/keycloak/jeton.sh)
+./mvnw spring-boot:build-image                      # image conteneur (buildpacks), profil prod par défaut
 ```
 
 Lancer `./mvnw test` après toute modification et avant de déclarer une tâche terminée.
@@ -83,6 +85,9 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - `@Table(name = "...")` explicite, contraintes de colonne (`nullable`, `length`, `unique`) déclarées.
 - Relations `@ManyToOne(fetch = FetchType.LAZY, optional = false)` avec `@JoinColumn` explicite.
 - Durées en `BigDecimal` (heures), dates en `LocalDate`.
+- Toute entité hérite d'`EntiteAuditee` (colonnes `cree_le`, `cree_par`, `modifie_le`,
+  `modifie_par`, remplies par Spring Data via `AuditConfig`, à inclure dans le script Flyway de la
+  table) ; horodatages d'audit en `Instant` (UTC), jamais renseignés par le code applicatif.
 - Éviter les mots réservés SQL comme noms de colonne (`date`, `user`…) : préférer `jour`, `utilisateur`.
 
 ### Repositories
@@ -106,8 +111,12 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - Messages de contrainte en français, explicites dans l'annotation quand ils sont visibles par
   l'utilisateur (`@DecimalMin(value = ..., message = "doit être d'au moins {value} h")`).
 - Le `Response` expose une fabrique `static from(Entite)` ; les relations sont exposées par leur id
-  (`projetId`, `tacheId`).
+  (`projetId`, `tacheId`) ; le dernier composant est `AuditResponse audit` (`AuditResponse.from(entite)`).
 - Un champ booléen optionnel en entrée est un `Boolean` (null = valeur par défaut).
+- Verrouillage optimiste : chaque entité a un `@Version Long version` (colonne `version`), exposé
+  dans le `Response`. Le `Request` porte un `Long version` annoté
+  `@NotNull(groups = Modification.class, message = "est obligatoire en modification")` : obligatoire
+  en `PUT`, ignoré en création.
 
 ### Services
 - `@Service @RequiredArgsConstructor @Transactional(readOnly = true)` sur la classe,
@@ -116,11 +125,60 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - Les règles métier vivent ici, pas dans les contrôleurs ni les entités.
 - Un service peut réutiliser la méthode `getXxx(id)` (visibilité paquet) d'un autre service pour
   charger une entité avec la bonne erreur 404.
+- `update` : après `getXxx(id)`, `VerrouOptimiste.verifier(entite.getVersion(), request.version())`
+  (409 si le client a lu une version périmée) ; après `apply`, `repository.flush()` avant de
+  convertir en `Response`, pour renvoyer la version incrémentée.
+- Une règle qui dépend de plusieurs lignes (ex. total journalier) se protège des écritures
+  simultanées par un verrou pessimiste sur la ligne parente (`@Lock(PESSIMISTIC_WRITE)` avec un
+  délai d'attente borné par `@QueryHint` dans le repository, voir
+  `UtilisateurRepository.findVerrouilleById`), dans une transaction
+  `@Transactional(isolation = Isolation.READ_COMMITTED)` : sous l'isolation par défaut de MariaDB
+  (REPEATABLE READ), la première lecture fige la vue de la transaction, et un calcul fait après
+  l'attente du verrou ignorerait les écritures validées entre-temps (voir `SaisieTempsService`).
+- Date du jour : `LocalDate.now(clock)` avec le bean `Clock`, dans le fuseau
+  `Constantes.FUSEAU_HORAIRE` ; jamais `LocalDate.now()` sans argument.
 
 ### Contrôleurs
-- Retournent toujours une `ApiResponse<T>` (voir ci-dessous) ; `@Valid @RequestBody` sur les entrées.
+- Retournent toujours une `ApiResponse<T>` (voir ci-dessous) ; `@Valid @RequestBody` sur les entrées,
+  `@Validated({ Default.class, Modification.class }) @RequestBody` sur les `PUT`.
 - `POST` → 201 + en-tête `Location` ; `DELETE` → 200 avec `data: null` et un message de confirmation.
-- Les filtres de liste sont des `@RequestParam(required = false)`.
+  Exception : un `POST` qui crée plusieurs ressources d'un coup renvoie 201 avec leur liste (éventuellement
+  vide) et un message, sans `Location` (voir `POST /api/clotures/tous-projets`).
+- Les filtres de liste sont des `@RequestParam(required = false)`, ou un record validé lu dans les
+  paramètres (`@Valid RechercheSaisiesRequest`) quand des règles portent sur plusieurs filtres.
+- Toute liste est paginée : paramètre `@Valid PaginationRequest pagination`, réponse
+  `ApiResponse<PageResponse<T>>` (`PageResponse.from(page, XxxResponse::from)`) ; le tri est imposé
+  par le service (`pagination.versPageRequest(Sort.by(...))`), jamais choisi par le client.
+
+## Sécurité
+
+- Authentification par jeton OIDC (resource server JWT, `SecurityConfig`), sans session : signature,
+  émetteur, **audience** (`OIDC_AUDIENCE`) et expiration vérifiés ; rôle administrateur = valeur
+  `Constantes.ROLE_ADMIN` dans la revendication des rôles.
+- Règles grossières par URL et rôle dans `SecurityConfig` (lecture pour tout authentifié, écritures
+  de référentiel réservées à l'administrateur) ; règles fines (« ses propres saisies », membres d'un
+  projet) dans les **services**, via `UtilisateurCourantService` (`estAdmin()`, `get()`), en levant
+  `AccesRefuseException`. Jamais de contrôle d'accès dans un contrôleur.
+- 401 et 403 de Spring Security passent par `GlobalExceptionHandler` (enveloppe `ApiResponse`).
+- Un utilisateur est identifié par la revendication `sub` (colonne `utilisateur.sujet`), rattachée
+  une fois par l'email du jeton, seulement s'il est déclaré vérifié (`email_verified`, voir
+  `ProprietesSecurite.exigerEmailVerifie`).
+- Actuator : en prod, sur un port de gestion séparé (`MANAGEMENT_PORT`) sans jeton, réservé au
+  réseau interne ; sur le port de l'API (dev, test), santé publique et autres points réservés à
+  l'administrateur. Tout nouveau point Actuator exposé suit cette règle (`SecurityConfig`).
+
+## Exploitation
+
+- Logs : SLF4J ; JSON ECS en prod (`logging.structured.format.console`). Chaque requête porte un
+  identifiant de corrélation (`IdentifiantCorrelationFilter`, en-tête `X-Correlation-Id`, clé MDC
+  `correlationId`) : ne pas le recréer dans le code, il est présent dans toutes les lignes de log.
+- Jamais de donnée personnelle ni de valeur de requête SQL dans un log (nom de contrainte, type
+  d'exception, identifiant technique seulement).
+- Toute variable d'environnement de production est ajoutée sans valeur à `.env.example` (bloc
+  « Production uniquement ») et décrite dans `docs/DEPLOIEMENT.md` (§ Variables d'environnement) ; une variable facultative
+  a une valeur par défaut dans `application-prod.yml`, jamais un secret.
+- `GestionTempsApplicationProductionTest` démarre l'application en profil prod : toute nouvelle
+  variable obligatoire de production y est ajoutée.
 
 ## Format des réponses et gestion des erreurs
 
@@ -137,17 +195,26 @@ erreur, **lever une exception héritant de `ApplicationException`** ; ne jamais 
 
 Chaque exception porte son code HTTP, que `GlobalExceptionHandler` applique automatiquement :
 
-| Exception                     | HTTP | Usage                                                   |
-|-------------------------------|------|---------------------------------------------------------|
-| `ResourceNotFoundException`   | 404  | entité introuvable                                      |
-| `DuplicateResourceException`  | 409  | contrainte d'unicité (code, email…)                     |
-| `ResourceInUseException`      | 409  | suppression d'une ressource encore référencée           |
-| `BusinessRuleException`       | 422  | règle métier enfreinte (24 h/jour, ressource inactive…) |
-| `ApplicationException`        | 500  | erreur technique (utilisée directement)                 |
-| validation Bean Validation    | 400  | gérée automatiquement, champs en cause dans `message`   |
+| Exception                          | HTTP | Usage                                                   |
+|------------------------------------|------|---------------------------------------------------------|
+| `ResourceNotFoundException`        | 404  | entité introuvable                                      |
+| `DuplicateResourceException`       | 409  | contrainte d'unicité (code, email…)                     |
+| `ResourceInUseException`           | 409  | suppression d'une ressource encore référencée           |
+| `ModificationConcurrenteException` | 409  | version périmée envoyée en modification                 |
+| `AccesRefuseException`             | 403  | droit insuffisant (saisie d'un autre, compte inconnu…)  |
+| `BusinessRuleException`            | 422  | règle métier enfreinte (24 h/jour, ressource inactive…) |
+| `ApplicationException`             | 500  | erreur technique (utilisée directement)                 |
+| validation Bean Validation         | 400  | gérée automatiquement, champs en cause dans `message`   |
 
 Pour un nouveau cas, créer une sous-classe d'`ApplicationException` qui passe son `HttpStatus` au
 constructeur parent : aucun handler supplémentaire n'est nécessaire.
+
+`GlobalExceptionHandler` traduit aussi trois exceptions techniques levées en cas d'accès
+concurrents, toutes en 409 sans détail SQL : `DataIntegrityViolationException` (contrainte de base,
+ex. doublon créé simultanément ; seul le nom de la contrainte est journalisé, jamais la valeur),
+`ObjectOptimisticLockingFailureException` (`@Version`) et `PessimisticLockingFailureException`
+(verrou non obtenu dans le délai). Les erreurs de Spring MVC (400, 404, 405, 415) ont des messages
+en français.
 
 Messages d'erreur en français, compréhensibles par un utilisateur final.
 
@@ -159,11 +226,22 @@ Messages d'erreur en français, compréhensibles par un utilisateur final.
 - Le total des saisies d'un utilisateur sur une journée ne dépasse pas `Constantes.MAX_HEURES_JOUR` (24 h).
 - Pas de nouvelle saisie pour un utilisateur, une tâche ou un projet désactivé ; une saisie
   existante reste corrigeable tant qu'on ne change ni l'utilisateur ni la tâche.
+- Le jour d'une saisie nouvelle ou déplacée (autre jour ou autre tâche) est compris dans la période
+  du projet (`dateDebut`, `dateFin`, bornes incluses, nulles = ouvertes).
+- Un mois clôturé pour un projet (`Cloture`) interdit de créer, modifier, déplacer (vers ou depuis
+  ce mois) ou supprimer ses saisies, administrateur compris. Seul un mois terminé se clôture, par un
+  administrateur ou un membre du projet ; seul un administrateur le rouvre. Chaque écriture de saisie
+  verrouille le projet en lecture et une clôture le verrouille en écriture (`ProjetRepository`) :
+  une saisie ne peut pas s'intercaler pendant une clôture.
 
 ## Tests
 
 - Classe de test nommée **classe cible + `Test`**, dans le même paquet que la classe testée
   (ex. `SaisieTempsControllerTest`, `GlobalExceptionHandlerTest`).
+- Authentification : les tests MockMvc importent `JetonsDeTest.AdministrateurParDefaut` (chaque
+  requête est faite en administrateur) et la remplacent au besoin par `.with(collaborateur(u))`,
+  `.with(jwt())` ou `.with(anonymous())`. Toute règle d'accès est testée avec le rôle autorisé
+  **et** un rôle refusé (voir `SecurityConfigTest`, droits dans `SaisieTempsControllerTest`).
 - Contrôleurs : tests d'intégration
   `@SpringBootTest @AutoConfigureMockMvc @ActiveProfiles("test") @Transactional`.
 - Noms de méthodes en français décrivant le comportement (`deleteProjetRefuseSiTachesExistantes`).
@@ -171,11 +249,24 @@ Messages d'erreur en français, compréhensibles par un utilisateur final.
 - Vérifier le corps sous `$.data` (succès) ou `$.message` (erreur).
 - Chaque nouvelle règle métier s'accompagne d'un test du cas accepté **et** du cas refusé.
 - Ne pas comparer les messages de Bean Validation mot pour mot : ils dépendent de la langue de la JVM.
+- Les tests tournent sur MariaDB (même moteur qu'en production), dans un conteneur Testcontainers
+  partagé par toute la suite (`application-test.yml`) : Docker doit être lancé.
+- Une règle qui dépend de transactions réellement validées (accès concurrents, verrous) se teste
+  dans une classe **sans** `@Transactional`, qui vide la base dans un `@AfterEach`
+  (voir `SaisieTempsServiceTest`).
+- `./mvnw verify` impose une couverture minimale des lignes du paquet `service`
+  (`couverture.service.minimum` dans `pom.xml`) ; rapport dans `target/site/jacoco/index.html`.
 
 ## Base de données
 
-- Le profil `prod` utilise `ddl-auto: validate` : toute nouvelle entité ou colonne exige un script
-  de migration du schéma de production, à signaler dans la PR.
+- Le schéma est géré **uniquement par Flyway** (`src/main/resources/db/migration`), appliqué au
+  démarrage dans tous les profils ; Hibernate est en `ddl-auto: validate` partout et refuse de
+  démarrer si une entité ne correspond pas au schéma.
+- Toute nouvelle entité, colonne, contrainte ou index exige un nouveau script
+  `V<n>__description_en_snake_case.sql`, ajouté dans la même PR que l'entité et signalé dans sa
+  description. Un script déjà fusionné n'est **jamais** modifié.
+- Dans les scripts : SQL compatible MariaDB 11.4, tables `engine=InnoDB default charset=utf8mb4`,
+  contraintes nommées `uk_<table>_<colonne>`, `fk_<table>_<cible>`, index `idx_<table>_<colonnes>`.
 - `open-in-view` est désactivé : convertir les entités en DTO dans la transaction du service.
 - Informations de connexion jamais versionnées : `application-*.yml` ne contient que des
   placeholders sans valeur par défaut (`${DB_PASSWORD}`). En dev, les valeurs sont dans `.env`
@@ -194,17 +285,23 @@ Messages d'erreur en français, compréhensibles par un utilisateur final.
 | `develop`   | `main`       | —                       | intégration de la prochaine version          |
 | `feature/*` | `develop`    | `develop`               | une fonctionnalité                           |
 | `bugfix/*`  | `develop`    | `develop`               | correction avant mise en production          |
+| `chore/*`   | `develop`    | `develop`               | maintenance : version, dépendances, configuration |
 | `release/*` | `develop`    | `main` **et** `develop` | préparation d'une version (pas de nouveauté) |
 | `hotfix/*`  | `main`       | `main` **et** `develop` | correctif urgent en production               |
 
 - Nommage : `type/numero-description-courte` en minuscules et tirets
-  (`feature/12-saisie-sans-date`, `release/0.2.0`, `hotfix/0.1.1-total-journalier`).
-- Jamais de commit direct sur `main` ni `develop` (bloqué par le hook `commit-msg`), sauf le
-  changement de version sur `develop` après une release : `chore(release): version X.Y.Z`.
-- `feature/*` et `bugfix/*` → `develop` : pull request fusionnée en **squash**, après `/review`.
-- `release/*` et `hotfix/*` → `main` : fusion `--no-ff` puis tag `vX.Y.Z` ; reporter ensuite la
-  même branche dans `develop`.
-- Les branches de travail sont supprimées après fusion.
+  (`feature/12-saisie-sans-date`, `chore/version-0.2.0`, `release/1.0.0`, `hotfix/1.0.1-total-journalier`).
+- **Toute** modification de `main` ou `develop` passe par une pull request : GitHub l'impose à
+  tous, administrateurs compris (CI « Build et tests » verte et branche à jour), et le hook
+  `commit-msg` refuse localement les commits directs sur ces branches.
+- `feature/*`, `bugfix/*`, `chore/*` → `develop` : pull request fusionnée en **squash**, après
+  `/review`. Le titre de la pull request devient le message du commit : il suit donc le format
+  Conventional Commits.
+- `release/*` et `hotfix/*` → `main` : pull request fusionnée en **merge commit** (équivalent
+  `--no-ff`), puis tag `vX.Y.Z` sur `main` ; reporter ensuite la même branche dans `develop` par
+  une pull request en merge commit (pas de squash, pour garder l'historique commun).
+- Les branches de travail sont supprimées automatiquement après fusion.
+- Branche par défaut sur GitHub : `develop` (cible par défaut des pull requests).
 
 ### Messages de commit
 
@@ -223,12 +320,19 @@ Changement incompatible de l'API : `!` après le type (`feat(api)!: …`).
 
 - Versionnement sémantique `MAJEUR.MINEUR.CORRECTIF`, identique dans `pom.xml` et dans le tag Git
   (`v0.1.0`) ; pas de suffixe `-SNAPSHOT`.
-- **Avant 1.0.0** (phase actuelle) : pas de release ni de tag. `main` reste sur la version
-  d'initialisation (`0.0.1`) ; `develop` porte la version en cours (`0.1.0`, puis `0.2.0`…), changée
-  par un commit `chore(release): version 0.Y.0` sur `develop`.
-- **À partir de 1.0.0** : chaque version passe par une `release/X.Y.Z` qui la fige, est fusionnée
-  dans `main` avec le tag `vX.Y.Z`, puis `develop` passe à la version mineure suivante ; un
-  `hotfix/*` augmente le correctif (`1.0.0` → `1.0.1`).
+- Changement de version sur `develop` : branche `chore/version-X.Y.Z` qui ne modifie que
+  `pom.xml`, pull request intitulée `chore(release): version X.Y.Z`, fusion en squash.
+- Chaque version passe par une `release/X.Y.Z` qui la fige (version du `pom.xml`, `CHANGELOG.md`,
+  documentation ; aucune nouveauté), est fusionnée dans `main` avec le tag `vX.Y.Z`, puis `develop`
+  passe à la version mineure suivante (branche `chore/version-…`) ; un `hotfix/*` augmente le
+  correctif (`1.0.0` → `1.0.1`) et suit le même circuit.
+- **Chaque passage en production** (`release/*` ou `hotfix/*` fusionnée dans `main`) : section
+  `## [X.Y.Z] - AAAA-MM-JJ` ajoutée dans `CHANGELOG.md` sur la branche de release, puis **release
+  GitHub** `vX.Y.Z` sur le tag, dont les notes reprennent cette section. Le CHANGELOG signale les
+  changements incompatibles, les nouvelles variables d'environnement et les migrations (avec leur
+  compatibilité en mise à jour progressive, voir `docs/DEPLOIEMENT.md`).
+- Le guide de déploiement (`docs/DEPLOIEMENT.md`) est mis à jour dans la PR qui change le
+  déploiement (variable, port, prérequis, procédure).
 
 ### Qualité
 
@@ -243,6 +347,7 @@ Changement incompatible de l'API : `!` après le type (`feat(api)!: …`).
   (`LoggerFactory.getLogger(...)`).
 - Nombres magiques en dur : les déclarer dans `Constantes` (voir « Constantes »).
 - SQL natif ou requêtes concaténées : utiliser les méthodes du repository (voir « Repositories »).
+  Les scripts de migration Flyway (DDL) ne sont pas concernés : c'est le seul endroit où du SQL est écrit.
 - Appeler un repository depuis un contrôleur : toujours passer par le service.
 - Lever une `RuntimeException` brute : utiliser une sous-classe d'`ApplicationException`.
 - Exposer une entité JPA dans une réponse : passer par un DTO.

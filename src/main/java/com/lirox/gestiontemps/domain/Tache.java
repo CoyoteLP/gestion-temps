@@ -9,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -21,11 +22,16 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-public class Tache {
+public class Tache extends EntiteAuditee {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
+
+	/** Version pour le verrouillage optimiste, incrémentée par Hibernate à chaque modification. */
+	@Version
+	@Column(nullable = false)
+	private Long version;
 
 	/** Projet auquel appartient la tâche. */
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)

@@ -1,4 +1,4 @@
-# Profil de développement : MariaDB locale, schéma mis à jour automatiquement.
+# Profil de développement : MariaDB locale, schéma créé par les migrations Flyway.
 # Les informations de connexion ne sont pas versionnées : elles sont lues dans le fichier .env à la
 # racine du projet (copie de .env.example, ignorée par Git) ou dans les variables d'environnement,
 # qui restent prioritaires.
@@ -9,7 +9,16 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Émetteur des jetons (fournisseur OIDC) ; ses clés publiques sont lues à la première requête
+          issuer-uri: ${OIDC_ISSUER_URI}
+          # Destinataire attendu (revendication aud) : refuse les jetons émis pour d'autres applications
+          audiences: ${OIDC_AUDIENCE}
+
+logging:
+  level:
+    # Requêtes SQL émises par Hibernate (sans les valeurs des paramètres)
+    org.hibernate.SQL: debug
