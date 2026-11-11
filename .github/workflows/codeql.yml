@@ -1,4 +1,4 @@
-# Analyse de sécurité du code Java (CodeQL) : injections, désérialisation, fuites de données…
+# Analyse de sécurité du code Java et du front-end TypeScript (CodeQL) : injections, désérialisation, fuites de données…
 # Résultats dans l'onglet Security > Code scanning du dépôt ; une alerte n'empêche pas la fusion.
 name: CodeQL
 
@@ -20,26 +20,30 @@ concurrency:
 
 jobs:
   analyse:
-    name: Analyse CodeQL
+    name: Analyse CodeQL (${{ matrix.langage }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
       security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        langage: [java-kotlin, javascript-typescript]
 
     steps:
       - name: Récupérer le code
         uses: actions/checkout@v7
 
-      # Analyse sans compilation : pas de dépendance au build Maven ni à Docker
+      # Analyse sans compilation : pas de dépendance au build Maven, à Docker ni à npm
       - name: Initialiser CodeQL
         uses: github/codeql-action/init@v4
         with:
-          languages: java-kotlin
+          languages: ${{ matrix.langage }}
           build-mode: none
           queries: security-extended
 
       - name: Analyser
         uses: github/codeql-action/analyze@v4
         with:
-          category: /language:java-kotlin
+          category: /language:${{ matrix.langage }}
