@@ -15,4 +15,13 @@ public class ResourceNotFoundException extends ApplicationException {
 		super(resource + " introuvable (id=" + id + ")", HttpStatus.NOT_FOUND);
 	}
 
+	/**
+	 * Ressource qui ne se désigne pas par un identifiant (ex. la fiche de l'utilisateur connecté).
+	 *
+	 * @param message message affiché à l'utilisateur
+	 */
+	public ResourceNotFoundException(String message) {
+		super(message, HttpStatus.NOT_FOUND);
+	}
+
 }

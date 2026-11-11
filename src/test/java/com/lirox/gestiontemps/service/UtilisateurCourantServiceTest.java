@@ -37,6 +37,8 @@ class UtilisateurCourantServiceTest {
 
 	private static final String COMPTE_INCONNU =
 			"Aucun utilisateur ne correspond à votre compte : contactez un administrateur";
+	private static final String EMAIL_NON_VERIFIE =
+			"Votre adresse email doit être vérifiée avant l'enregistrement de votre compte";
 
 	@Autowired
 	private UtilisateurCourantService utilisateurCourantService;
@@ -86,7 +88,7 @@ class UtilisateurCourantServiceTest {
 		save("jdupont@lirox.com", null);
 		authentifier("sujet-1", Map.of("email", "jdupont@lirox.com", "email_verified", false));
 		assertThatThrownBy(utilisateurCourantService::get).isInstanceOf(AccesRefuseException.class)
-				.hasMessage(COMPTE_INCONNU);
+				.hasMessage(EMAIL_NON_VERIFIE);
 		assertThat(utilisateurRepository.findBySujet("sujet-1")).isEmpty();
 	}
 
@@ -95,7 +97,7 @@ class UtilisateurCourantServiceTest {
 		save("jdupont@lirox.com", null);
 		authentifier("sujet-1", Map.of("email", "jdupont@lirox.com"));
 		assertThatThrownBy(utilisateurCourantService::get).isInstanceOf(AccesRefuseException.class)
-				.hasMessage(COMPTE_INCONNU);
+				.hasMessage(EMAIL_NON_VERIFIE);
 		assertThat(utilisateurRepository.findBySujet("sujet-1")).isEmpty();
 	}
 
@@ -115,6 +117,20 @@ class UtilisateurCourantServiceTest {
 				new ProprietesSecurite("roles", false));
 		authentifier("sujet-1", Map.of("email", "jdupont@lirox.com", "email_verified", false));
 		assertThatThrownBy(tolerant::get).isInstanceOf(AccesRefuseException.class);
+	}
+
+	@Test
+	void refuseUnCompteSansFicheAvecEmailVerifieCommeInconnu() {
+		authentifier("sujet-1", Map.of("email", "inconnu@lirox.com", "email_verified", true));
+		assertThatThrownBy(utilisateurCourantService::get).isInstanceOf(AccesRefuseException.class)
+				.hasMessage(COMPTE_INCONNU);
+	}
+
+	@Test
+	void refuseUnCompteSansFicheNiEmailCommeInconnu() {
+		authentifier("sujet-1", Map.of());
+		assertThatThrownBy(utilisateurCourantService::get).isInstanceOf(AccesRefuseException.class)
+				.hasMessage(COMPTE_INCONNU);
 	}
 
 	@Test
@@ -147,21 +163,12 @@ class UtilisateurCourantServiceTest {
 	}
 
 	@Test
-	void refuseUnCompteSansUtilisateur() {
-		authentifier("sujet-1", Map.of("email", "inconnu@lirox.com"));
-		assertThatThrownBy(utilisateurCourantService::get).isInstanceOf(AccesRefuseException.class)
-				.hasMessage(COMPTE_INCONNU);
-		authentifier("sujet-1", Map.of());
-		assertThatThrownBy(utilisateurCourantService::get).isInstanceOf(AccesRefuseException.class);
-	}
-
-	@Test
 	void refuseUnUtilisateurDesactive() {
 		Utilisateur utilisateur = save("jdupont@lirox.com", "sujet-1");
 		utilisateur.setActif(false);
 		authentifier("sujet-1", Map.of());
 		assertThatThrownBy(utilisateurCourantService::get).isInstanceOf(AccesRefuseException.class)
-				.hasMessage("Votre compte est désactivé : contactez un administrateur");
+				.hasMessage("Votre compte n'est pas actif (en attente de validation ou désactivé) : contactez un administrateur");
 	}
 
 	@Test

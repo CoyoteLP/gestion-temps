@@ -200,7 +200,8 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - Messages de contrainte en français, explicites dans l'annotation quand ils sont visibles par
   l'utilisateur (`@DecimalMin(value = ..., message = "doit être d'au moins {value} h")`).
 - Le `Response` expose une fabrique `static from(Entite)` ; les relations sont exposées par leur id
-  (`projetId`, `tacheId`) ; le dernier composant est `AuditResponse audit` (`AuditResponse.from(entite)`).
+  (`projetId`, `tacheId`) ; le dernier composant est `AuditResponse audit` (`AuditResponse.from(entite)`),
+  renvoyé aux seuls administrateurs (`null` pour les autres, à la sérialisation : `AuditReserveConfig`).
 - Un champ booléen optionnel en entrée est un `Boolean` (null = valeur par défaut).
 - Verrouillage optimiste : chaque entité a un `@Version Long version` (colonne `version`), exposé
   dans le `Response`. Le `Request` porte un `Long version` annoté
@@ -244,14 +245,16 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - Authentification par jeton OIDC (resource server JWT, `SecurityConfig`), sans session : signature,
   émetteur, **audience** (`OIDC_AUDIENCE`) et expiration vérifiés ; rôle administrateur = valeur
   `Constantes.ROLE_ADMIN` dans la revendication des rôles.
-- Règles grossières par URL et rôle dans `SecurityConfig` (lecture pour tout authentifié, écritures
-  de référentiel réservées à l'administrateur) ; règles fines (« ses propres saisies », membres d'un
+- Règles grossières par URL et rôle dans `SecurityConfig` (lecture pour tout titulaire d'une fiche
+  active ou administrateur, sa propre fiche `/api/utilisateurs/moi` pour tout authentifié, liste des
+  utilisateurs et écritures de référentiel réservées à l'administrateur) ; règles fines (« ses propres saisies », membres d'un
   projet) dans les **services**, via `UtilisateurCourantService` (`estAdmin()`, `get()`), en levant
   `AccesRefuseException`. Jamais de contrôle d'accès dans un contrôleur.
 - 401 et 403 de Spring Security passent par `GlobalExceptionHandler` (enveloppe `ApiResponse`).
 - Un utilisateur est identifié par la revendication `sub` (colonne `utilisateur.sujet`), rattachée
   une fois par l'email du jeton, seulement s'il est déclaré vérifié (`email_verified`, voir
-  `ProprietesSecurite.exigerEmailVerifie`).
+  `ProprietesSecurite.exigerEmailVerifie`), ou dès la création de sa fiche par inscription
+  (`POST /api/utilisateurs/moi`).
 - Actuator : en prod, sur un port de gestion séparé (`MANAGEMENT_PORT`) sans jeton, réservé au
   réseau interne ; sur le port de l'API (dev, test), santé publique et autres points réservés à
   l'administrateur. Tout nouveau point Actuator exposé suit cette règle (`SecurityConfig`).
@@ -310,6 +313,8 @@ Messages d'erreur en français, compréhensibles par un utilisateur final.
 ## Règles métier à préserver
 
 - On ne supprime pas une ressource encore référencée : on la désactive (`actif = false`).
+- Un utilisateur qui s'inscrit lui-même a une fiche **inactive** jusqu'à sa validation par un
+  administrateur ; sans fiche active, un compte n'accède qu'à sa propre fiche (`/api/utilisateurs/moi`).
 - Une saisie dure de 0,5 h à 24 h, par pas de 0,5 h (`Constantes.DUREE_MIN_SAISIE`,
   `DUREE_MAX_SAISIE`, `PAS_DUREE_SAISIE`).
 - Le total des saisies d'un utilisateur sur une journée ne dépasse pas `Constantes.MAX_HEURES_JOUR` (24 h).

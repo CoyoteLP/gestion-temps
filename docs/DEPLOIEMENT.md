@@ -55,6 +55,15 @@ Déclarer l'API auprès du fournisseur :
    rattache le compte à l'utilisateur créé avec cet email, puis le reconnaît par `sub`. Si le
    fournisseur ne transmet pas `email_verified` mais garantit les emails (annuaire de
    l'entreprise) : `OIDC_EXIGER_EMAIL_VERIFIE=false`.
+4. **Inscription** (facultative) : si le fournisseur laisse les utilisateurs créer leur compte
+   (Keycloak : *User registration*), il doit vérifier leur email (Keycloak : *Verify email*, avec un
+   serveur SMTP configuré) et transmettre `given_name` et `family_name` (portée `profile`). L'inscrit
+   crée sa fiche par `POST /api/utilisateurs/moi` ; elle reste **inactive** jusqu'à sa validation
+   par un administrateur (`GET /api/utilisateurs?actif=false`, puis `PUT /api/utilisateurs/{id}`
+   avec `actif: true`). D'ici là, il n'accède qu'à sa propre fiche.
+
+Un compte authentifié sans fiche active (inconnu, en attente, désactivé) ne lit rien d'autre que
+sa propre fiche (403), sauf s'il porte le rôle administrateur.
 
 `OIDC_ISSUER_URI` est l'émetteur exact des jetons (revendication `iss`) ; l'API y lit la
 configuration OIDC (`/.well-known/openid-configuration`) et les clés de signature à la première
@@ -229,5 +238,6 @@ Le délai de l'orchestrateur avant `SIGKILL` doit être supérieur :
 - [ ] `OPENAPI_ACTIVE` absent ou `false` (sauf documentation publique voulue).
 - [ ] Compte de l'application sans droit DDL ; mots de passe dans le gestionnaire de secrets.
 - [ ] Jetons du fournisseur : `aud`, rôle `ADMIN` pour les seuls administrateurs, `email_verified`.
+- [ ] Inscription ouverte chez le fournisseur : vérification de l'email activée (SMTP configuré).
 - [ ] Sauvegardes de la base planifiées et restauration testée.
 - [ ] Logs collectés ; alerte sur les `ERROR` ; métriques collectées.

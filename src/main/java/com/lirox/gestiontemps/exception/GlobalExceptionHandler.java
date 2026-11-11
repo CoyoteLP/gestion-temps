@@ -108,14 +108,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	}
 
 	/**
-	 * Rôle insuffisant pour l'URL demandée (ex. écriture d'un projet sans le rôle administrateur),
-	 * relayé par Spring Security.
+	 * Refus relayé par Spring Security : rôle insuffisant pour l'URL demandée (ex. écriture d'un
+	 * projet sans le rôle administrateur), ou compte sans fiche active (le refus du service en cause,
+	 * {@link AccesRefuseException}, porte alors le message).
 	 *
 	 * @param ex refus d'accès
 	 * @return 403 avec un message destiné à l'utilisateur
 	 */
 	@ExceptionHandler(AccessDeniedException.class)
 	public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+		if (ex.getCause() instanceof AccesRefuseException refus) {
+			return error(HttpStatus.FORBIDDEN, refus.getMessage());
+		}
 		return error(HttpStatus.FORBIDDEN, "Accès refusé : cette opération est réservée aux administrateurs");
 	}
 

@@ -41,15 +41,19 @@ public class Utilisateur extends EntiteAuditee {
 	private String prenom;
 
 	/**
-	 * Identifiant du compte chez le fournisseur OIDC (revendication {@code sub} du jeton), renseigné
-	 * à la première connexion par rapprochement de l'email ; null tant que l'utilisateur ne s'est
-	 * jamais connecté. Renseigné uniquement par {@code UtilisateurRepository.rattacherSujet}, sans
-	 * changer la version ni l'audit de la fiche.
+	 * Identifiant du compte chez le fournisseur OIDC (revendication {@code sub} du jeton). Fiche créée
+	 * par un administrateur : renseigné à la première connexion par rapprochement de l'email, par
+	 * {@code UtilisateurRepository.rattacherSujet} (sans changer la version ni l'audit) ; null tant
+	 * que l'utilisateur ne s'est jamais connecté. Fiche créée par l'utilisateur lui-même
+	 * (inscription) : renseigné dès la création.
 	 */
 	@Column(unique = true, length = 255)
 	private String sujet;
 
-	/** Un utilisateur désactivé ne peut plus saisir de nouveau temps. */
+	/**
+	 * Un utilisateur inactif (inscrit en attente de validation, ou désactivé) n'accède qu'à sa propre
+	 * fiche, et ne peut plus saisir de nouveau temps.
+	 */
 	@Column(nullable = false)
 	private boolean actif = true;
 
