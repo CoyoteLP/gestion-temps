@@ -83,7 +83,7 @@ Les ressources `utilisateurs`, `taches` et `saisies-temps` exposent les mêmes o
 
 | Ressource                | Filtres (GET liste)                          |
 |--------------------------|----------------------------------------------|
-| /api/utilisateurs        | –                                            |
+| /api/utilisateurs        | `actif` (`false` : comptes à valider) ; administrateur seulement |
 | /api/taches              | `projetId`                                   |
 | /api/saisies-temps       | `utilisateurId`, `projetId`, `tacheId`, `du`, `au` (dates, voir ci-dessous) |
 | /api/projets/{projetId}/membres | –                                     |
@@ -118,6 +118,19 @@ datée d'aujourd'hui ; en modification (`PUT`), un `jour` absent conserve la dat
 
 Supprimer une ressource encore référencée (projet avec tâches, tâche ou utilisateur avec
 saisies) renvoie 409 : il faut alors la désactiver (`actif: false`).
+
+### Compte de l'utilisateur connecté
+
+Chacun gère sa propre fiche, même sans fiche ou avec une fiche inactive :
+
+| Méthode | URL                   | Description |
+|---------|-----------------------|-------------|
+| GET     | /api/utilisateurs/moi | Sa fiche ; `actif: false` = en attente de validation. 404 s'il n'en a pas encore |
+| POST    | /api/utilisateurs/moi | **Inscription** : crée sa fiche à partir du jeton (email vérifié, `given_name`, `family_name`), sans corps. 201 ; 409 si elle existe déjà ; 422 si l'email n'est pas vérifié ou si le nom manque |
+| PUT     | /api/utilisateurs/moi | Modifie son nom et son prénom (`{ "nom", "prenom", "version" }`) ; l'email et l'état ne se modifient pas ici |
+
+La fiche créée par l'inscription est **inactive** : un administrateur la valide
+(`GET /api/utilisateurs?actif=false`, puis `PUT /api/utilisateurs/{id}` avec `actif: true`).
 
 ### Modification et accès concurrents
 
@@ -170,9 +183,13 @@ Sans jeton valide (signature, émetteur, audience, expiration) : 401.
 - **Rôle administrateur** : la revendication des rôles du jeton (`roles` par défaut, configurable
   par `OIDC_ROLES_CLAIM`, ex. `realm_access.roles` pour Keycloak) contient `ADMIN`. L'administrateur
   gère les projets, tâches, utilisateurs et membres, et accède à toutes les saisies.
-- **Collaborateur** : tout autre utilisateur authentifié. Il lit les projets, tâches, utilisateurs
-  et membres ; il crée, modifie et supprime **ses** saisies, et consulte en plus celles des projets
-  dont il est membre (filtre `projetId` ou `tacheId`). Toute autre écriture : 403.
+- **Collaborateur** : tout autre utilisateur authentifié, dont la fiche est **active**. Il lit les
+  projets, tâches et membres, et sa propre fiche (`/api/utilisateurs/moi`) ; il crée, modifie et
+  supprime **ses** saisies, et consulte en plus celles des projets dont il est membre (filtre
+  `projetId` ou `tacheId`). La liste et le détail des utilisateurs, et toute autre écriture : 403.
+- **Compte sans fiche active** (inconnu, inscrit en attente de validation, désactivé) : il n'accède
+  qu'à sa propre fiche (`/api/utilisateurs/moi`) ; tout le reste renvoie 403, avec un message qui
+  en donne la raison. Un administrateur n'a pas besoin de fiche.
 - **Membres d'un projet** (`/api/projets/{projetId}/membres`) : un utilisateur avec un rôle de
   projet `MANAGER` ou `BACKUP` (mêmes droits aujourd'hui).
 - **Rattachement du compte** : l'administrateur crée l'utilisateur avec son email ; à la première
@@ -180,7 +197,8 @@ Sans jeton valide (signature, émetteur, audience, expiration) : 401.
   L'email doit être déclaré vérifié par le fournisseur (`email_verified: true`) ; pour un
   fournisseur qui ne transmet pas cette revendication mais garantit les emails (annuaire de
   l'entreprise), `OIDC_EXIGER_EMAIL_VERIFIE=false` accepte son absence.
-  Un compte sans utilisateur correspondant, ou un utilisateur désactivé, reçoit 403 sur les saisies.
+  Sans fiche, un utilisateur peut aussi s'inscrire lui-même (`POST /api/utilisateurs/moi`, voir
+  « Compte de l'utilisateur connecté ») : sa fiche est alors rattachée à son compte dès sa création.
 
 ### Keycloak de développement
 
@@ -211,6 +229,11 @@ curl -H "Authorization: Bearer $ADMIN" -H 'Content-Type: application/json' \
 JDUPONT=$(./docker/keycloak/jeton.sh jdupont)
 curl -H "Authorization: Bearer $JDUPONT" http://localhost:8080/api/saisies-temps
 ```
+
+**Inscription en dev** : la page de connexion de Keycloak propose « S'inscrire ». Le Keycloak de
+dev n'a pas de serveur d'emails : après l'inscription, cocher *Email verified* sur le compte dans la
+console (*Users*), puis créer la fiche avec le jeton de l'inscrit (`POST /api/utilisateurs/moi`) et
+la valider en administrateur (`PUT /api/utilisateurs/{id}` avec `actif: true`).
 
 Les jetons durent 30 minutes. Console d'administration : http://localhost:8180/admin (`admin`,
 mot de passe `KEYCLOAK_ADMIN_PASSWORD`, `admin` par défaut). Sous Git Bash (Windows), éviter les
@@ -261,7 +284,9 @@ Toutes les réponses (succès comme erreurs) utilisent la même enveloppe, le co
 { "status": "error", "data": null, "message": "Projet introuvable (id=9999)" }
 ```
 
-Chaque ressource renvoyée porte un objet `audit` en lecture seule : date et auteur de la création
+Chaque ressource renvoyée porte un objet `audit` en lecture seule, renvoyé aux **seuls
+administrateurs** (`null` pour les autres, qui n'ont pas à connaître l'email des auteurs) : date et
+auteur de la création
 et de la dernière modification (instants UTC ; auteur = email du jeton, ou identifiant du compte
 à défaut, null pour les données antérieures à l'audit).
 

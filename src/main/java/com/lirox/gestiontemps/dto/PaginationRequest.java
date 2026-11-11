@@ -25,7 +25,8 @@ public record PaginationRequest(
 	 * @return la page correspondante pour Spring Data (numérotée à partir de 0)
 	 */
 	public PageRequest versPageRequest(Sort tri) {
-		int numero = page == null ? 0 : page - 1;
+		// Garde redondante avec @Min, qui s'applique avant : protège un appel sans validation
+		int numero = page == null || page < 1 ? 0 : page - 1;
 		int nombre = taille == null ? Constantes.TAILLE_PAGE_PAR_DEFAUT : Math.min(taille, Constantes.TAILLE_PAGE_MAX);
 		return PageRequest.of(numero, nombre, tri);
 	}

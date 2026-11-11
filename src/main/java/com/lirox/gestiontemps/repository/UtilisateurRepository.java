@@ -2,6 +2,8 @@ package com.lirox.gestiontemps.repository;
 
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -19,6 +21,13 @@ import jakarta.persistence.QueryHint;
  * Accès aux données des utilisateurs.
  */
 public interface UtilisateurRepository extends JpaRepository<Utilisateur, Long> {
+
+	/**
+	 * @param actif    état recherché (false : comptes en attente de validation ou désactivés)
+	 * @param pageable page et tri demandés
+	 * @return une page des utilisateurs dans cet état
+	 */
+	Page<Utilisateur> findByActif(boolean actif, Pageable pageable);
 
 	/**
 	 * @param email adresse email

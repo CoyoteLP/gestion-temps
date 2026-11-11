@@ -3,6 +3,7 @@ package com.lirox.gestiontemps.controller;
 import static com.lirox.gestiontemps.JetonsDeTest.collaborateur;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -154,7 +155,10 @@ class ClotureControllerTest {
 						{"projetId": %d, "mois": "2026-05"}
 						""".formatted(projet.getId())))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.data.audit.creePar").value(membre.getSujet()));
+				// L'audit n'est renvoyé qu'aux administrateurs ; il est bien enregistré
+				.andExpect(jsonPath("$.data.audit").value(nullValue()));
+		assertThat(clotureRepository.findAll()).singleElement()
+				.satisfies(cloture -> assertThat(cloture.getCreePar()).isEqualTo(membre.getSujet()));
 	}
 
 	@Test

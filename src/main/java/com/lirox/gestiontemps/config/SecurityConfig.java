@@ -11,7 +11,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthenticatedAuthorizationManager;
 import org.springframework.security.authorization.AuthorityAuthorizationManager;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.authorization.AuthorizationResult;
 import org.springframework.security.authorization.SingleResultAuthorizationManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -23,9 +28,12 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthen
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import com.lirox.gestiontemps.common.Constantes;
+import com.lirox.gestiontemps.exception.AccesRefuseException;
+import com.lirox.gestiontemps.service.UtilisateurCourantService;
 
 /**
  * Sécurité de l'API : jetons JWT émis par le fournisseur OIDC
@@ -36,9 +44,13 @@ import com.lirox.gestiontemps.common.Constantes;
  * <li>autres points Actuator (informations, métriques Prometheus) : publics s'ils sont servis sur un
  * port de gestion séparé ({@code management.server.port}, production), que seul le réseau interne
  * atteint ; réservés au rôle {@link Constantes#ROLE_ADMIN} sur le port de l'API ;</li>
- * <li>tout utilisateur authentifié peut lire ({@code GET}), gérer ses saisies de temps et demander
- * une clôture ; les règles fines (ses propres saisies, membres d'un projet) sont appliquées par les
- * services ;</li>
+ * <li>sa propre fiche ({@code /api/utilisateurs/moi}) : tout utilisateur authentifié, même sans
+ * fiche ou avec une fiche inactive (inscription, attente de validation) ;</li>
+ * <li>la liste et le détail des utilisateurs sont réservés au rôle {@link Constantes#ROLE_ADMIN} ;</li>
+ * <li>un utilisateur dont la fiche est active (ou un administrateur, même sans fiche) peut lire
+ * ({@code GET}), gérer ses saisies de temps et demander une clôture ; les règles fines (ses propres
+ * saisies, membres d'un projet) sont appliquées par les services. Un compte sans fiche active
+ * (inscrit non validé, désactivé, inconnu) reçoit 403 ;</li>
  * <li>les autres écritures (projets, tâches, utilisateurs, membres) sont réservées au rôle
  * {@link Constantes#ROLE_ADMIN} ;</li>
  * <li>401 et 403 sont renvoyés dans l'enveloppe {@code ApiResponse} par le
@@ -56,17 +68,19 @@ public class SecurityConfig {
 	 * @param proprietes        paramètres de sécurité de l'application
 	 * @param exceptionResolver résolveur de Spring MVC, pour traiter 401 et 403 comme les autres erreurs
 	 * @param environment       configuration, pour savoir si Actuator a son propre port
+	 * @param utilisateurCourant identité de l'appelant, pour exiger une fiche active
 	 * @return la chaîne de filtres de sécurité
 	 * @throws Exception si la configuration est invalide
 	 */
 	@Bean
 	SecurityFilterChain securityFilterChain(HttpSecurity http, ProprietesSecurite proprietes,
-			@Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver, Environment environment)
-			throws Exception {
+			@Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver, Environment environment,
+			UtilisateurCourantService utilisateurCourant) throws Exception {
 		boolean portDeGestionSepare = ManagementPortType.get(environment) == ManagementPortType.DIFFERENT;
 		AuthenticationEntryPoint authentificationRequise = authentificationRequise(exceptionResolver);
 		AccessDeniedHandler accesRefuse = (request, response, ex) -> exceptionResolver.resolveException(request,
 				response, null, ex);
+		AuthorizationManager<RequestAuthorizationContext> compteActif = compteActif(utilisateurCourant);
 		return http
 				// Sans session ni cookie, le jeton est envoyé explicitement dans l'en-tête Authorization :
 				// un site tiers ne peut pas le faire envoyer par le navigateur, la protection CSRF est inutile
@@ -79,9 +93,12 @@ public class SecurityConfig {
 								: AuthorityAuthorizationManager.hasRole(Constantes.ROLE_ADMIN))
 						.requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**")
 						.permitAll()
-						.requestMatchers(HttpMethod.GET, "/api/**").authenticated()
-						.requestMatchers("/api/saisies-temps", "/api/saisies-temps/**").authenticated()
-						.requestMatchers(HttpMethod.POST, "/api/clotures", "/api/clotures/tous-projets").authenticated()
+						.requestMatchers("/api/utilisateurs/moi").authenticated()
+						.requestMatchers(HttpMethod.GET, "/api/utilisateurs", "/api/utilisateurs/**")
+						.hasRole(Constantes.ROLE_ADMIN)
+						.requestMatchers(HttpMethod.GET, "/api/**").access(compteActif)
+						.requestMatchers("/api/saisies-temps", "/api/saisies-temps/**").access(compteActif)
+						.requestMatchers(HttpMethod.POST, "/api/clotures", "/api/clotures/tous-projets").access(compteActif)
 						.requestMatchers("/api/**").hasRole(Constantes.ROLE_ADMIN)
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(serveur -> serveur
@@ -91,6 +108,32 @@ public class SecurityConfig {
 						.authenticationEntryPoint(authentificationRequise)
 						.accessDeniedHandler(accesRefuse))
 				.build();
+	}
+
+	/**
+	 * Authentifié, et administrateur ou titulaire d'une fiche active. Un refus lié au compte (inscrit
+	 * non validé, désactivé, inconnu) devient une {@link AccessDeniedException} qui porte le refus du
+	 * service en cause : le {@code GlobalExceptionHandler} en affiche le message.
+	 *
+	 * @param utilisateurCourant identité de l'appelant
+	 * @return la règle d'accès
+	 */
+	static AuthorizationManager<RequestAuthorizationContext> compteActif(UtilisateurCourantService utilisateurCourant) {
+		AuthorizationManager<RequestAuthorizationContext> authentifie = AuthenticatedAuthorizationManager.authenticated();
+		return (authentification, contexte) -> {
+			AuthorizationResult resultat = authentifie.authorize(authentification, contexte);
+			if (resultat == null || !resultat.isGranted()) {
+				// Requête anonyme : 401 par le point d'entrée de l'authentification
+				return resultat;
+			}
+			try {
+				utilisateurCourant.verifierCompteActif();
+				return new AuthorizationDecision(true);
+			}
+			catch (AccesRefuseException refus) {
+				throw new AccessDeniedException(refus.getMessage(), refus);
+			}
+		};
 	}
 
 	/**

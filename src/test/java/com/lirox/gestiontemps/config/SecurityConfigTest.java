@@ -53,11 +53,13 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 import com.lirox.gestiontemps.JetonsDeTest;
+import com.lirox.gestiontemps.domain.Utilisateur;
 import com.lirox.gestiontemps.repository.ProjetRepository;
+import com.lirox.gestiontemps.repository.UtilisateurRepository;
 
 /**
- * Règles d'accès par URL et rôle (sans administrateur par défaut : chaque requête précise son
- * jeton), réponses 401/403, validation des vrais jetons (signature, émetteur, audience,
+ * Règles d'accès par URL, rôle et état du compte (sans administrateur par défaut : chaque requête
+ * précise son jeton), réponses 401/403, validation des vrais jetons (signature, émetteur, audience,
  * expiration) et lecture des rôles dans le jeton.
  */
 @SpringBootTest
@@ -97,6 +99,9 @@ class SecurityConfigTest {
 	@Autowired
 	private ProjetRepository projetRepository;
 
+	@Autowired
+	private UtilisateurRepository utilisateurRepository;
+
 	@Test
 	void requeteSansJetonRenvoie401() throws Exception {
 		mockMvc.perform(get("/api/projets"))
@@ -112,6 +117,9 @@ class SecurityConfigTest {
 			"GET,    /api/projets",
 			"GET,    /api/taches",
 			"GET,    /api/utilisateurs",
+			"GET,    /api/utilisateurs/moi",
+			"POST,   /api/utilisateurs/moi",
+			"PUT,    /api/utilisateurs/moi",
 			"GET,    /api/saisies-temps",
 			"GET,    /api/projets/1/membres",
 			"GET,    /api/projets/1/membres/1",
@@ -133,6 +141,7 @@ class SecurityConfigTest {
 
 	@Test
 	void unJetonDestineALApiEstAccepte() throws Exception {
+		saveUtilisateur("sujet-test", true);
 		mockMvc.perform(get("/api/projets").header(HttpHeaders.AUTHORIZATION, bearer(jetonSigne(CLE, AUDIENCE_API))))
 				.andExpect(status().isOk());
 	}
@@ -218,10 +227,81 @@ class SecurityConfigTest {
 				.andExpect(status().isOk());
 	}
 
+	// Compte de l'appelant : une fiche active est exigée (sauf administrateur et /moi)
+
 	@ParameterizedTest
-	@ValueSource(strings = { "/api/projets", "/api/taches", "/api/utilisateurs" })
-	void unCollaborateurPeutToutLire(String url) throws Exception {
+	@ValueSource(strings = { "/api/projets", "/api/taches", "/api/saisies-temps", "/api/clotures" })
+	void unUtilisateurActifPeutLire(String url) throws Exception {
+		mockMvc.perform(get(url).with(JetonsDeTest.collaborateur(saveUtilisateur("sujet-actif", true))))
+				.andExpect(status().isOk());
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "/api/projets", "/api/taches", "/api/saisies-temps", "/api/clotures" })
+	void unCompteSansFicheNeLitRien(String url) throws Exception {
 		mockMvc.perform(get(url).with(jwt()))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.status").value("error"))
+				.andExpect(jsonPath("$.message")
+						.value("Aucun utilisateur ne correspond à votre compte : contactez un administrateur"));
+	}
+
+	@Test
+	void unCompteSansFicheDontLEmailNEstPasVerifieEstInviteAVerifierSonEmail() throws Exception {
+		mockMvc.perform(get("/api/projets").with(jwt().jwt(jeton -> jeton.subject("sujet-non-verifie")
+				.claim("email", "inscrit@lirox.test").claim("email_verified", false))))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message")
+						.value("Votre adresse email doit être vérifiée avant l'enregistrement de votre compte"));
+	}
+
+	@Test
+	void unCompteSansFicheDontLEmailEstVerifieEstInconnu() throws Exception {
+		mockMvc.perform(get("/api/projets").with(jwt().jwt(jeton -> jeton.subject("sujet-verifie")
+				.claim("email", "inscrit@lirox.test").claim("email_verified", true))))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message")
+						.value("Aucun utilisateur ne correspond à votre compte : contactez un administrateur"));
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "GET, /api/projets", "GET, /api/saisies-temps", "POST, /api/saisies-temps", "POST, /api/clotures" })
+	void unCompteInactifNAccedeARien(String methode, String url) throws Exception {
+		Utilisateur inactif = saveUtilisateur("sujet-inactif", false);
+		mockMvc.perform(request(HttpMethod.valueOf(methode), url).with(JetonsDeTest.collaborateur(inactif))
+				.contentType(MediaType.APPLICATION_JSON).content("{}"))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message").value(
+						"Votre compte n'est pas actif (en attente de validation ou désactivé) : contactez un administrateur"));
+	}
+
+	@Test
+	void unAdministrateurSansFichePeutLire() throws Exception {
+		mockMvc.perform(get("/api/projets").with(JetonsDeTest.admin()))
+				.andExpect(status().isOk());
+	}
+
+	@Test
+	void saFicheEstAccessibleSansFicheActive() throws Exception {
+		mockMvc.perform(get("/api/utilisateurs/moi").with(jwt()))
+				.andExpect(status().isNotFound());
+		mockMvc.perform(get("/api/utilisateurs/moi")
+				.with(JetonsDeTest.collaborateur(saveUtilisateur("sujet-inactif", false))))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.actif").value(false));
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "/api/utilisateurs", "/api/utilisateurs/1" })
+	void laLectureDesUtilisateursEstReserveeAuxAdministrateurs(String url) throws Exception {
+		mockMvc.perform(get(url).with(JetonsDeTest.collaborateur(saveUtilisateur("sujet-actif", true))))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message").value("Accès refusé : cette opération est réservée aux administrateurs"));
+	}
+
+	@Test
+	void unAdministrateurLitLesUtilisateurs() throws Exception {
+		mockMvc.perform(get("/api/utilisateurs").with(JetonsDeTest.admin()))
 				.andExpect(status().isOk());
 	}
 
@@ -291,6 +371,16 @@ class SecurityConfigTest {
 		assertThat(SecurityConfig.roles(jeton(Map.of("autre", "ADMIN")), "roles")).isEmpty();
 		assertThat(SecurityConfig.roles(jeton(Map.of("realm_access", "ADMIN")), "realm_access.roles")).isEmpty();
 		assertThat(SecurityConfig.roles(jeton(Map.of("roles", 42)), "roles")).isEmpty();
+	}
+
+	private Utilisateur saveUtilisateur(String sujet, boolean actif) {
+		Utilisateur utilisateur = new Utilisateur();
+		utilisateur.setEmail(sujet + "@lirox.com");
+		utilisateur.setNom("Dupont");
+		utilisateur.setPrenom("Jean");
+		utilisateur.setSujet(sujet);
+		utilisateur.setActif(actif);
+		return utilisateurRepository.save(utilisateur);
 	}
 
 	private static String bearer(String jeton) {

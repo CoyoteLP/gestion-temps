@@ -707,6 +707,10 @@ class SaisieTempsControllerTest {
 						{"version": 0, "tacheId": %d, "duree": 3}
 						""".formatted(tache.getId())))
 				.andExpect(status().isOk())
+				// L'audit n'est renvoyé qu'aux administrateurs : relu par l'administrateur par défaut
+				.andExpect(jsonPath("$.data.audit").value(nullValue()));
+		mockMvc.perform(get("/api/saisies-temps/{id}", id))
+				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.audit.creePar").value(JetonsDeTest.SUJET_ADMIN))
 				.andExpect(jsonPath("$.data.audit.creeLe").value(INSTANT_FIXE.toString()))
 				.andExpect(jsonPath("$.data.audit.modifiePar").value("cdurand@lirox.com"));

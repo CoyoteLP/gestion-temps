@@ -2,6 +2,9 @@ package com.lirox.gestiontemps.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.endsWith;
+import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -24,6 +27,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.lirox.gestiontemps.JetonsDeTest;
@@ -234,6 +238,222 @@ class UtilisateurControllerTest {
 		return champs.entrySet().stream()
 				.map(e -> "\"" + e.getKey() + "\": \"" + e.getValue() + "\"")
 				.collect(Collectors.joining(", ", "{", "}"));
+	}
+
+	// Fiche de l'utilisateur connecté (/moi) : inscription, lecture, modification
+
+	@Test
+	void findMoiRenvoieLaFicheDeLAppelantSansSonAudit() throws Exception {
+		Utilisateur utilisateur = save("jdupont@lirox.com", "sujet-1", true);
+		mockMvc.perform(get("/api/utilisateurs/moi").with(JetonsDeTest.collaborateur(utilisateur)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.id").value(utilisateur.getId()))
+				.andExpect(jsonPath("$.data.email").value("jdupont@lirox.com"))
+				.andExpect(jsonPath("$.data.actif").value(true))
+				.andExpect(jsonPath("$.data.audit").value(nullValue()));
+	}
+
+	@Test
+	void lAdministrateurVoitLAuditDUnUtilisateur() throws Exception {
+		Utilisateur utilisateur = save("jdupont@lirox.com");
+		mockMvc.perform(get("/api/utilisateurs/{id}", utilisateur.getId()))
+				.andExpect(status().isOk())
+				// Fiche enregistrée hors requête authentifiée : seule la date de création est connue
+				.andExpect(jsonPath("$.data.audit.creeLe").isNotEmpty());
+	}
+
+	@Test
+	void findMoiRenvoieUneFicheEnAttenteDeValidation() throws Exception {
+		Utilisateur inscrit = save("jdupont@lirox.com", "sujet-1", false);
+		mockMvc.perform(get("/api/utilisateurs/moi").with(JetonsDeTest.collaborateur(inscrit)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.actif").value(false));
+	}
+
+	@Test
+	void findMoiRattacheUneFicheCreeeParLAdministrateur() throws Exception {
+		Utilisateur utilisateur = save("jdupont@lirox.com");
+		mockMvc.perform(get("/api/utilisateurs/moi").with(compte("sujet-1", Map.of("email", "jdupont@lirox.com",
+				"email_verified", true))))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.id").value(utilisateur.getId()));
+	}
+
+	@Test
+	void findMoiRenvoie404SansFiche() throws Exception {
+		mockMvc.perform(get("/api/utilisateurs/moi").with(compte("sujet-1", identite())))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.message").value("Votre compte n'est pas encore enregistré"));
+	}
+
+	@Test
+	void createMoiCreeUneFicheInactiveRattacheeAuCompte() throws Exception {
+		Map<String, Object> identite = identite();
+		identite.put("family_name", "  Durand ");
+		mockMvc.perform(post("/api/utilisateurs/moi").with(compte("sujet-1", identite)))
+				.andExpect(status().isCreated())
+				.andExpect(header().string("Location", endsWith("/api/utilisateurs/moi")))
+				.andExpect(jsonPath("$.data.email").value("cdurand@lirox.com"))
+				.andExpect(jsonPath("$.data.nom").value("Durand"))
+				.andExpect(jsonPath("$.data.prenom").value("Claire"))
+				.andExpect(jsonPath("$.data.actif").value(false))
+				.andExpect(jsonPath("$.message")
+						.value("Compte enregistré : il sera actif après validation par un administrateur"));
+		assertThat(utilisateurRepository.findBySujet("sujet-1")).hasValueSatisfying(fiche -> {
+			assertThat(fiche.getEmail()).isEqualTo("cdurand@lirox.com");
+			assertThat(fiche.isActif()).isFalse();
+		});
+	}
+
+	@Test
+	void createMoiRefuseUnCompteDejaEnregistre() throws Exception {
+		save("cdurand@lirox.com", "sujet-1", false);
+		mockMvc.perform(post("/api/utilisateurs/moi").with(compte("sujet-1", identite())))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value("Votre compte est déjà enregistré"));
+		assertThat(utilisateurRepository.count()).isEqualTo(1);
+	}
+
+	@Test
+	void createMoiNeDoublePasUneFicheCreeeParLAdministrateur() throws Exception {
+		save("cdurand@lirox.com");
+		mockMvc.perform(post("/api/utilisateurs/moi").with(compte("sujet-1", identite())))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value("Votre compte est déjà enregistré"));
+		assertThat(utilisateurRepository.count()).isEqualTo(1);
+	}
+
+	@Test
+	void createMoiRefuseUnEmailRattacheAUnAutreCompte() throws Exception {
+		save("cdurand@lirox.com", "sujet-1", true);
+		mockMvc.perform(post("/api/utilisateurs/moi").with(compte("sujet-2", identite())))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value("Un utilisateur avec l'email 'cdurand@lirox.com' existe déjà"));
+		assertThat(utilisateurRepository.findBySujet("sujet-2")).isEmpty();
+	}
+
+	@Test
+	void createMoiRefuseUnEmailNonVerifie() throws Exception {
+		Map<String, Object> identite = identite();
+		identite.put("email_verified", false);
+		mockMvc.perform(post("/api/utilisateurs/moi").with(compte("sujet-1", identite)))
+				.andExpect(status().isUnprocessableContent())
+				.andExpect(jsonPath("$.message")
+						.value("Votre adresse email doit être vérifiée avant l'enregistrement de votre compte"));
+		assertThat(utilisateurRepository.count()).isZero();
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "family_name, nom", "given_name, prenom", "email, email" })
+	void createMoiRefuseUnCompteIncomplet(String revendicationAbsente, String champ) throws Exception {
+		Map<String, Object> identite = identite();
+		identite.remove(revendicationAbsente);
+		mockMvc.perform(post("/api/utilisateurs/moi").with(compte("sujet-1", identite)))
+				.andExpect(status().isUnprocessableContent())
+				.andExpect(jsonPath("$.message", containsString("compte de connexion : " + champ + ".")));
+		assertThat(utilisateurRepository.count()).isZero();
+	}
+
+	@Test
+	void createMoiRefuseUnNomTropLong() throws Exception {
+		Map<String, Object> identite = identite();
+		identite.put("family_name", "x".repeat(101));
+		mockMvc.perform(post("/api/utilisateurs/moi").with(compte("sujet-1", identite)))
+				.andExpect(status().isUnprocessableContent())
+				.andExpect(jsonPath("$.message", containsString(": nom.")));
+		assertThat(utilisateurRepository.count()).isZero();
+	}
+
+	@Test
+	void updateMoiModifieSeulementNomEtPrenom() throws Exception {
+		Utilisateur inscrit = save("jdupont@lirox.com", "sujet-1", false);
+		utilisateurRepository.flush();
+		mockMvc.perform(put("/api/utilisateurs/moi").with(JetonsDeTest.collaborateur(inscrit))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"nom": "Martin", "prenom": "Paul", "version": 0,
+						 "email": "autre@lirox.com", "actif": true}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.nom").value("Martin"))
+				.andExpect(jsonPath("$.data.prenom").value("Paul"))
+				.andExpect(jsonPath("$.data.version").value(1))
+				// Ni l'email ni l'état ne sont modifiables par l'utilisateur
+				.andExpect(jsonPath("$.data.email").value("jdupont@lirox.com"))
+				.andExpect(jsonPath("$.data.actif").value(false));
+	}
+
+	@Test
+	void updateMoiRefuseUneVersionPerimee() throws Exception {
+		Utilisateur utilisateur = save("jdupont@lirox.com", "sujet-1", true);
+		utilisateurRepository.flush();
+		mockMvc.perform(put("/api/utilisateurs/moi").with(JetonsDeTest.collaborateur(utilisateur))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"nom": "Martin", "prenom": "Paul", "version": 5}
+						"""))
+				.andExpect(status().isConflict());
+		assertThat(utilisateurRepository.findById(utilisateur.getId())).map(Utilisateur::getNom).contains("Dupont");
+	}
+
+	@Test
+	void updateMoiRefuseUneRequeteInvalide() throws Exception {
+		Utilisateur utilisateur = save("jdupont@lirox.com", "sujet-1", true);
+		mockMvc.perform(put("/api/utilisateurs/moi").with(JetonsDeTest.collaborateur(utilisateur))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"nom": "", "prenom": "Paul"}
+						"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message", containsString("nom :")))
+				.andExpect(jsonPath("$.message", containsString("version :")));
+		assertThat(utilisateurRepository.findById(utilisateur.getId())).map(Utilisateur::getNom).contains("Dupont");
+	}
+
+	@Test
+	void updateMoiRenvoie404SansFiche() throws Exception {
+		mockMvc.perform(put("/api/utilisateurs/moi").with(compte("sujet-1", identite()))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"nom": "Martin", "prenom": "Paul", "version": 0}
+						"""))
+				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void findAllFiltreParEtat() throws Exception {
+		save("actif@lirox.com", "sujet-1", true);
+		save("inscrit@lirox.com", "sujet-2", false);
+		mockMvc.perform(get("/api/utilisateurs").param("actif", "false"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.total").value(1))
+				.andExpect(jsonPath("$.data.contenu[0].email").value("inscrit@lirox.com"));
+		mockMvc.perform(get("/api/utilisateurs").param("actif", "true"))
+				.andExpect(jsonPath("$.data.total").value(1))
+				.andExpect(jsonPath("$.data.contenu[0].email").value("actif@lirox.com"));
+		mockMvc.perform(get("/api/utilisateurs"))
+				.andExpect(jsonPath("$.data.total").value(2));
+	}
+
+	/** Revendications d'un compte inscrit chez le fournisseur : email vérifié, prénom et nom. */
+	private static Map<String, Object> identite() {
+		Map<String, Object> revendications = new LinkedHashMap<>();
+		revendications.put("email", "cdurand@lirox.com");
+		revendications.put("email_verified", true);
+		revendications.put("given_name", "Claire");
+		revendications.put("family_name", "Durand");
+		return revendications;
+	}
+
+	/** Jeton d'un compte sans rôle, avec les revendications données. */
+	private static RequestPostProcessor compte(String sujet, Map<String, Object> revendications) {
+		return jwt().jwt(jeton -> jeton.subject(sujet).claims(claims -> claims.putAll(revendications)));
+	}
+
+	private Utilisateur save(String email, String sujet, boolean actif) {
+		Utilisateur utilisateur = new Utilisateur();
+		utilisateur.setEmail(email);
+		utilisateur.setNom("Dupont");
+		utilisateur.setPrenom("Jean");
+		utilisateur.setSujet(sujet);
+		utilisateur.setActif(actif);
+		return utilisateurRepository.save(utilisateur);
 	}
 
 	private Utilisateur save(String email) {
