@@ -1,0 +1,9 @@
+.next/
+node_modules/
+coverage/
+package-lock.json
+next-env.d.ts
+src/lib/api/schema.d.ts
+AGENTS.md
+# Généré par shadcn, jamais modifié à la main
+src/components/ui/

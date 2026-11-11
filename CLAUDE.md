@@ -1,8 +1,103 @@
 # CLAUDE.md
 
-Conventions de l'équipe pour le projet **gestion-temps** : API REST de gestion du temps de travail
-(Spring Boot 4, Java 21, JPA, MariaDB). Ce fichier est versionné ; les préférences personnelles
-vont dans `CLAUDE.local.md` (non versionné).
+Conventions de l'équipe pour le projet **gestion-temps** : gestion du temps de travail, avec une
+API REST (Spring Boot 4, Java 21, JPA, MariaDB) et un front-end web (Next.js). Ce fichier est
+versionné ; les préférences personnelles vont dans `CLAUDE.local.md` (non versionné).
+
+> La partie « Backend (API Java) » ne s'applique pas sous `web/`, qui a ses propres conventions
+> dans [`web/CLAUDE.md`](web/CLAUDE.md). La partie « Commun » s'applique partout.
+
+# Commun
+
+## Dépôt
+
+Monorepo, un seul Git Flow et une seule version pour les deux applications :
+
+- racine : l'API Java (`pom.xml`, `src/`) ;
+- `web/` : le front-end Next.js, qui appelle l'API depuis son serveur (BFF) ;
+- `docker/` : environnement de dev (Keycloak) ; `docs/` : déploiement et plans.
+
+Skills du projet :
+- backend (`.claude/skills/`) : `/review [périmètre]` (revue des modifications : conventions de ce
+  fichier, sécurité, performance, sans rien modifier) et `/test [cible]` (écrit ou complète les
+  tests d'une cible puis les lance ; sans argument, lance toute la suite et diagnostique les échecs) ;
+- front-end (`web/.claude/skills/`) : `web:review` et `web:test`, mêmes rôles pour `web/`.
+
+## Git
+
+- Ne pas committer ni pousser sans demande explicite.
+- Mettre à jour le `README.md` (endpoints, règles, format) quand l'API change, ou le démarrage du front.
+
+### Branches (Git Flow)
+
+| Branche     | Créée depuis | Fusionnée dans          | Rôle                                         |
+|-------------|--------------|-------------------------|----------------------------------------------|
+| `main`      | —            | —                       | production ; chaque commit est une version taguée |
+| `develop`   | `main`       | —                       | intégration de la prochaine version          |
+| `feature/*` | `develop`    | `develop`               | une fonctionnalité                           |
+| `bugfix/*`  | `develop`    | `develop`               | correction avant mise en production          |
+| `chore/*`   | `develop`    | `develop`               | maintenance : version, dépendances, configuration |
+| `release/*` | `develop`    | `main` **et** `develop` | préparation d'une version (pas de nouveauté) |
+| `hotfix/*`  | `main`       | `main` **et** `develop` | correctif urgent en production               |
+
+- Nommage : `type/numero-description-courte` en minuscules et tirets
+  (`feature/12-saisie-sans-date`, `chore/version-0.2.0`, `release/1.0.0`, `hotfix/1.0.1-total-journalier`).
+- **Toute** modification de `main` ou `develop` passe par une pull request : GitHub l'impose à
+  tous, administrateurs compris (CI « Build et tests » verte et branche à jour), et le hook
+  `commit-msg` refuse localement les commits directs sur ces branches.
+- `feature/*`, `bugfix/*`, `chore/*` → `develop` : pull request fusionnée en **squash**, après
+  `/review`. Le titre de la pull request devient le message du commit : il suit donc le format
+  Conventional Commits.
+- `release/*` et `hotfix/*` → `main` : pull request fusionnée en **merge commit** (équivalent
+  `--no-ff`), puis tag `vX.Y.Z` sur `main` ; reporter ensuite la même branche dans `develop` par
+  une pull request en merge commit (pas de squash, pour garder l'historique commun).
+- Les branches de travail sont supprimées automatiquement après fusion.
+- Branche par défaut sur GitHub : `develop` (cible par défaut des pull requests).
+
+### Messages de commit
+
+Conventional Commits, description **en français**, première ligne ≤ 100 caractères
+(vérifié par le hook `commit-msg`) :
+
+```
+type(portée): description à l'infinitif
+```
+
+Types : `feat`, `fix`, `test`, `docs`, `refactor`, `perf`, `style`, `chore`, `build`, `ci`, `revert`.
+Portée facultative, en minuscules : `saisie`, `projet`, `tache`, `utilisateur`, `config`…, et `web`
+pour tout changement du front-end (`feat(web): …`).
+Changement incompatible de l'API : `!` après le type (`feat(api)!: …`).
+
+### Versions
+
+- Versionnement sémantique `MAJEUR.MINEUR.CORRECTIF`, identique dans `pom.xml`, dans
+  `web/package.json` et dans le tag Git (`v0.1.0`) ; pas de suffixe `-SNAPSHOT`.
+- Changement de version sur `develop` : branche `chore/version-X.Y.Z` qui ne modifie que
+  `pom.xml` et `web/package.json` (avec `web/package-lock.json`), pull request intitulée
+  `chore(release): version X.Y.Z`, fusion en squash.
+- Chaque version passe par une `release/X.Y.Z` qui la fige (version du `pom.xml` et de
+  `web/package.json`, `CHANGELOG.md`, documentation ; aucune nouveauté), est fusionnée dans `main`
+  avec le tag `vX.Y.Z`, puis `develop`
+  passe à la version mineure suivante (branche `chore/version-…`) ; un `hotfix/*` augmente le
+  correctif (`1.0.0` → `1.0.1`) et suit le même circuit.
+- **Chaque passage en production** (`release/*` ou `hotfix/*` fusionnée dans `main`) : section
+  `## [X.Y.Z] - AAAA-MM-JJ` ajoutée dans `CHANGELOG.md` sur la branche de release, puis **release
+  GitHub** `vX.Y.Z` sur le tag, dont les notes reprennent cette section. Le CHANGELOG signale les
+  changements incompatibles, les nouvelles variables d'environnement et les migrations (avec leur
+  compatibilité en mise à jour progressive, voir `docs/DEPLOIEMENT.md`).
+- Le guide de déploiement (`docs/DEPLOIEMENT.md`) est mis à jour dans la PR qui change le
+  déploiement (variable, port, prérequis, procédure).
+
+### Qualité
+
+- Fichiers en UTF-8, fins de ligne LF uniquement (`.gitattributes`, `.editorconfig`).
+- Hooks versionnés dans `.githooks/`, à activer une fois par poste : `git config core.hooksPath .githooks`.
+- L'intégration continue (`.github/workflows/ci.yml`) lance `./mvnw verify` sur chaque pull
+  request vers `main` et `develop` ; les tests ne sont pas relancés avant chaque push local.
+- Le workflow « Front web » (`.github/workflows/web.yml`) vérifie `web/` (lint, format, types, tests,
+  build) quand une pull request le modifie ; « Build et tests » reste la seule vérification obligatoire.
+
+# Backend (API Java)
 
 ## Commandes
 
@@ -15,12 +110,6 @@ docker compose -f docker/keycloak/compose.yaml up -d  # Keycloak de dev (jetons 
 ```
 
 Lancer `./mvnw test` après toute modification et avant de déclarer une tâche terminée.
-
-Skills du projet (`.claude/skills/`) :
-- `/review [périmètre]` : revue des modifications (conventions de ce fichier, sécurité,
-  performance), sans rien modifier.
-- `/test [cible]` : écrit ou complète les tests d'une cible puis les lance ; sans argument, lance
-  toute la suite et diagnostique les échecs.
 
 ## Architecture
 
@@ -271,75 +360,6 @@ Messages d'erreur en français, compréhensibles par un utilisateur final.
 - Informations de connexion jamais versionnées : `application-*.yml` ne contient que des
   placeholders sans valeur par défaut (`${DB_PASSWORD}`). En dev, les valeurs sont dans `.env`
   (ignoré par Git) ; toute nouvelle variable est ajoutée, sans valeur, à `.env.example`.
-
-## Git
-
-- Ne pas committer ni pousser sans demande explicite.
-- Mettre à jour le `README.md` (endpoints, règles, format) quand l'API change.
-
-### Branches (Git Flow)
-
-| Branche     | Créée depuis | Fusionnée dans          | Rôle                                         |
-|-------------|--------------|-------------------------|----------------------------------------------|
-| `main`      | —            | —                       | production ; chaque commit est une version taguée |
-| `develop`   | `main`       | —                       | intégration de la prochaine version          |
-| `feature/*` | `develop`    | `develop`               | une fonctionnalité                           |
-| `bugfix/*`  | `develop`    | `develop`               | correction avant mise en production          |
-| `chore/*`   | `develop`    | `develop`               | maintenance : version, dépendances, configuration |
-| `release/*` | `develop`    | `main` **et** `develop` | préparation d'une version (pas de nouveauté) |
-| `hotfix/*`  | `main`       | `main` **et** `develop` | correctif urgent en production               |
-
-- Nommage : `type/numero-description-courte` en minuscules et tirets
-  (`feature/12-saisie-sans-date`, `chore/version-0.2.0`, `release/1.0.0`, `hotfix/1.0.1-total-journalier`).
-- **Toute** modification de `main` ou `develop` passe par une pull request : GitHub l'impose à
-  tous, administrateurs compris (CI « Build et tests » verte et branche à jour), et le hook
-  `commit-msg` refuse localement les commits directs sur ces branches.
-- `feature/*`, `bugfix/*`, `chore/*` → `develop` : pull request fusionnée en **squash**, après
-  `/review`. Le titre de la pull request devient le message du commit : il suit donc le format
-  Conventional Commits.
-- `release/*` et `hotfix/*` → `main` : pull request fusionnée en **merge commit** (équivalent
-  `--no-ff`), puis tag `vX.Y.Z` sur `main` ; reporter ensuite la même branche dans `develop` par
-  une pull request en merge commit (pas de squash, pour garder l'historique commun).
-- Les branches de travail sont supprimées automatiquement après fusion.
-- Branche par défaut sur GitHub : `develop` (cible par défaut des pull requests).
-
-### Messages de commit
-
-Conventional Commits, description **en français**, première ligne ≤ 100 caractères
-(vérifié par le hook `commit-msg`) :
-
-```
-type(portée): description à l'infinitif
-```
-
-Types : `feat`, `fix`, `test`, `docs`, `refactor`, `perf`, `style`, `chore`, `build`, `ci`, `revert`.
-Portée facultative, en minuscules : `saisie`, `projet`, `tache`, `utilisateur`, `config`…
-Changement incompatible de l'API : `!` après le type (`feat(api)!: …`).
-
-### Versions
-
-- Versionnement sémantique `MAJEUR.MINEUR.CORRECTIF`, identique dans `pom.xml` et dans le tag Git
-  (`v0.1.0`) ; pas de suffixe `-SNAPSHOT`.
-- Changement de version sur `develop` : branche `chore/version-X.Y.Z` qui ne modifie que
-  `pom.xml`, pull request intitulée `chore(release): version X.Y.Z`, fusion en squash.
-- Chaque version passe par une `release/X.Y.Z` qui la fige (version du `pom.xml`, `CHANGELOG.md`,
-  documentation ; aucune nouveauté), est fusionnée dans `main` avec le tag `vX.Y.Z`, puis `develop`
-  passe à la version mineure suivante (branche `chore/version-…`) ; un `hotfix/*` augmente le
-  correctif (`1.0.0` → `1.0.1`) et suit le même circuit.
-- **Chaque passage en production** (`release/*` ou `hotfix/*` fusionnée dans `main`) : section
-  `## [X.Y.Z] - AAAA-MM-JJ` ajoutée dans `CHANGELOG.md` sur la branche de release, puis **release
-  GitHub** `vX.Y.Z` sur le tag, dont les notes reprennent cette section. Le CHANGELOG signale les
-  changements incompatibles, les nouvelles variables d'environnement et les migrations (avec leur
-  compatibilité en mise à jour progressive, voir `docs/DEPLOIEMENT.md`).
-- Le guide de déploiement (`docs/DEPLOIEMENT.md`) est mis à jour dans la PR qui change le
-  déploiement (variable, port, prérequis, procédure).
-
-### Qualité
-
-- Fichiers en UTF-8, fins de ligne LF uniquement (`.gitattributes`, `.editorconfig`).
-- Hooks versionnés dans `.githooks/`, à activer une fois par poste : `git config core.hooksPath .githooks`.
-- L'intégration continue (`.github/workflows/ci.yml`) lance `./mvnw verify` sur chaque pull
-  request vers `main` et `develop` ; les tests ne sont pas relancés avant chaque push local.
 
 ## Interdictions
 

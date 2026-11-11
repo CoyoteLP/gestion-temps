@@ -1,6 +1,7 @@
 # gestion-temps
 
-API REST de gestion du temps de travail (Spring Boot 4, Java 21).
+Gestion du temps de travail : une API REST (Spring Boot 4, Java 21) et son front-end web
+(Next.js, dans [`web/`](web/), voir « Front-end web »).
 
 - Mise en production et mises à jour : [guide de déploiement](docs/DEPLOIEMENT.md)
 - Nouveautés de chaque version : [CHANGELOG](CHANGELOG.md) et
@@ -216,6 +217,38 @@ mot de passe `KEYCLOAK_ADMIN_PASSWORD`, `admin` par défaut). Sous Git Bash (Win
 accents dans les corps JSON passés en argument à `curl` (ils ne sont pas envoyés en UTF-8) :
 utiliser un fichier (`--data-binary @corps.json`).
 
+## Front-end web
+
+Application Next.js dans `web/` (conventions : [web/CLAUDE.md](web/CLAUDE.md)). Le navigateur ne
+parle qu'au serveur Next.js, qui appelle l'API avec le jeton de l'utilisateur (BFF) : les jetons
+restent dans un cookie chiffré `httpOnly`, et l'API n'a pas de CORS à ouvrir.
+
+Prérequis : Node.js 22, le Keycloak de développement et l'API lancés (voir plus haut). Le royaume
+déclare le client public `gestion-temps-web` (Authorization Code + PKCE) ; après une mise à jour de
+`realm-gestion-temps.json`, le réimporter avec
+`docker compose -f docker/keycloak/compose.yaml down` puis `up -d`.
+
+```bash
+cd web
+cp .env.example .env.local      # puis renseigner AUTH_SECRET (voir ci-dessous)
+npm install
+npm run dev                     # http://localhost:3000
+```
+
+`AUTH_SECRET` chiffre le cookie de session : une valeur aléatoire propre à chaque poste, générée par
+`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Sous PowerShell, si
+`npm` est refusé (« l'exécution de scripts est désactivée »), autoriser les scripts locaux une fois :
+`Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`.
+
+Sans session, toute page renvoie vers `/connexion` ; un compte de test (`jdupont` / `jdupont`)
+doit exister dans l'API pour que la liste des projets s'affiche. Vérifications :
+`npm run lint`, `npm run format:check`, `npm run typecheck`, `npm test`, `npm run build` (lancées
+par le workflow « Front web » sur chaque pull request qui modifie `web/`). Sous Windows, lancer
+Vitest depuis un chemin en `C:\…` (majuscule), sinon aucun test n'est trouvé.
+
+Les types de l'API (`web/src/lib/api/schema.d.ts`) sont générés depuis l'API de dev en marche :
+`npm run api:types`.
+
 ## Format des réponses
 
 Toutes les réponses (succès comme erreurs) utilisent la même enveloppe, le code HTTP restant significatif :
@@ -262,10 +295,13 @@ En bref :
   requête dans le champ `correlationId` ; en dev, lisibles, avec les requêtes SQL d'Hibernate
   (niveau `debug` de `org.hibernate.SQL`).
 - **Analyses de sécurité** : Dependabot propose chaque semaine les mises à jour des dépendances
-  Maven et des actions GitHub (pull requests vers `develop`) ; CodeQL analyse le code à chaque
+  Maven, npm (`web/`) et des actions GitHub (pull requests vers `develop`) ; CodeQL analyse le
+  code Java et TypeScript à chaque
   pull request et chaque semaine (onglet *Security* du dépôt).
 
 ## Structure
+
+API (`src/main/java`) :
 
 ```
 com.lirox.gestiontemps
@@ -277,3 +313,7 @@ com.lirox.gestiontemps
 ├── dto          objets d'entrée/sortie
 └── exception    exceptions + handler global
 ```
+
+Front-end (`web/src`) : `app/` (pages), `components/` (dont `ui/`, composants shadcn/ui),
+`lib/api/` (client de l'API), `lib/auth/` (session et jetons), `auth.ts` et `proxy.ts`
+(authentification et protection des pages).

@@ -45,6 +45,46 @@
 					}
 				}
 			]
+		},
+		{
+			"clientId": "gestion-temps-web",
+			"name": "gestion-temps (front-end web)",
+			"description": "Client public du front-end Next.js (web/) : Authorization Code + PKCE",
+			"enabled": true,
+			"publicClient": true,
+			"standardFlowEnabled": true,
+			"directAccessGrantsEnabled": false,
+			"redirectUris": ["http://localhost:3000/api/auth/callback/keycloak"],
+			"webOrigins": ["http://localhost:3000"],
+			"attributes": {
+				"pkce.code.challenge.method": "S256",
+				"post.logout.redirect.uris": "http://localhost:3000/connexion"
+			},
+			"protocolMappers": [
+				{
+					"name": "audience-api",
+					"protocol": "openid-connect",
+					"protocolMapper": "oidc-audience-mapper",
+					"config": {
+						"included.custom.audience": "gestion-temps-api",
+						"access.token.claim": "true",
+						"id.token.claim": "false"
+					}
+				},
+				{
+					"name": "roles",
+					"protocol": "openid-connect",
+					"protocolMapper": "oidc-usermodel-realm-role-mapper",
+					"config": {
+						"claim.name": "roles",
+						"multivalued": "true",
+						"jsonType.label": "String",
+						"access.token.claim": "true",
+						"id.token.claim": "false",
+						"userinfo.token.claim": "false"
+					}
+				}
+			]
 		}
 	],
 	"users": [

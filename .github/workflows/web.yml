@@ -1,0 +1,71 @@
+# Intégration continue du front-end web (web/) : lint, format, types, tests unitaires et build.
+# Ne se déclenche que si web/ (ou ce fichier) change ; ci.yml, lui, s'exécute toujours, pour que la
+# vérification obligatoire « Build et tests » soit présente sur chaque pull request.
+name: Front web
+
+on:
+  push:
+    branches: [main, develop, 'release/**', 'hotfix/**']
+    paths: ['web/**', '.github/workflows/web.yml']
+  pull_request:
+    branches: [main, develop]
+    paths: ['web/**', '.github/workflows/web.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  build:
+    name: Front web
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v7
+
+      - name: Installer Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Types
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      # Secret aléatoire propre à chaque exécution, masqué dans les logs : aucun secret versionné
+      - name: Générer un secret de build
+        run: |
+          secret=$(openssl rand -base64 32)
+          echo "::add-mask::$secret"
+          echo "AUTH_SECRET=$secret" >> "$GITHUB_ENV"
+
+      # Variables factices : le build ne contacte ni Keycloak ni l'API
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          AUTH_KEYCLOAK_ID: gestion-temps-web
+          AUTH_KEYCLOAK_ISSUER: http://localhost:8180/realms/gestion-temps
+          API_URL: http://localhost:8080
