@@ -115,3 +115,40 @@ export async function rafraichirJeton(jeton: JWT): Promise<JWT> {
 		return enErreur
 	}
 }
+
+/** Jetons obtenus par un renouvellement forcé, à enregistrer dans le cookie de session. */
+export type JetonsRenouveles = Required<Pick<JWT, "accessToken" | "expiresAt" | "estAdmin">> &
+	Pick<JWT, "refreshToken" | "idToken">
+
+/** Données passées à `unstable_update` pour enregistrer des jetons renouvelés (côté serveur). */
+export type MiseAJourJetons = { jetonsRenouveles: JetonsRenouveles }
+
+/**
+ * Lit les jetons renouvelés dans les données d'une mise à jour de session (`trigger: "update"` du
+ * callback `jwt`). Toute autre donnée est ignorée : seule une Server Action, côté serveur, peut
+ * demander cette mise à jour (`jetonAccesRenouvele`).
+ *
+ * @param donnees données passées à `unstable_update`
+ * @returns les jetons à enregistrer, ou null si les données n'en contiennent pas de valides
+ */
+export function jetonsRenouvelesDe(donnees: unknown): JetonsRenouveles | null {
+	if (!donnees || typeof donnees !== "object" || !("jetonsRenouveles" in donnees)) {
+		return null
+	}
+	const jetons = (donnees as MiseAJourJetons).jetonsRenouveles
+	if (
+		!jetons ||
+		typeof jetons.accessToken !== "string" ||
+		typeof jetons.expiresAt !== "number" ||
+		typeof jetons.estAdmin !== "boolean"
+	) {
+		return null
+	}
+	return {
+		accessToken: jetons.accessToken,
+		expiresAt: jetons.expiresAt,
+		estAdmin: jetons.estAdmin,
+		refreshToken: typeof jetons.refreshToken === "string" ? jetons.refreshToken : undefined,
+		idToken: typeof jetons.idToken === "string" ? jetons.idToken : undefined,
+	}
+}

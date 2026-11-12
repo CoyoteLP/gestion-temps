@@ -12,13 +12,23 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ApiError } from "@/lib/api/erreurs"
+import { lireMonCompte } from "@/lib/api/utilisateurs"
 import { seDeconnecter } from "@/lib/auth/actions"
 import { utilisateurCourant } from "@/lib/auth/session"
 import { initiales } from "@/lib/format"
 
-/** Menu de l'utilisateur connecté (lit la session : à placer dans un `<Suspense>`). */
+/**
+ * Menu de l'utilisateur connecté (lit la session et l'API : à placer dans un `<Suspense>`). Le nom
+ * affiché est celui de sa fiche, modifiable sur la page Profil, ou à défaut celui du compte de
+ * connexion.
+ */
 export async function MenuUtilisateur() {
-	const utilisateur = await utilisateurCourant()
+	const utilisateur = { ...(await utilisateurCourant()) }
+	const nomFiche = await nomDeLaFiche()
+	if (nomFiche) {
+		utilisateur.nom = nomFiche
+	}
 
 	return (
 		<DropdownMenu>
@@ -56,4 +66,20 @@ export async function MenuUtilisateur() {
 			</DropdownMenuContent>
 		</DropdownMenu>
 	)
+}
+
+/**
+ * Prénom et nom de la fiche ; null sans fiche ou si l'API est en erreur (le menu reste affiché).
+ * Seule une `ApiError` est interceptée : une redirection de Next.js (session expirée) suit son cours.
+ */
+async function nomDeLaFiche(): Promise<string | null> {
+	try {
+		const compte = await lireMonCompte()
+		return compte ? `${compte.prenom} ${compte.nom}` : null
+	} catch (erreur) {
+		if (erreur instanceof ApiError) {
+			return null
+		}
+		throw erreur
+	}
 }

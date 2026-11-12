@@ -1,9 +1,9 @@
 # Plan : lot F1 — compte de l'utilisateur connecté et auto-inscription
 
-> **État (2026-11-11)** : implémenté sur `feature/utilisateur-moi` ; `./mvnw verify` vert (341 tests) ;
+> **État (2026-11-11)** : livré, fusionné dans `develop` (PR #25) ; `./mvnw verify` vert (341 tests) ;
 > parcours de bout en bout vérifié avec le Keycloak de dev (inscription, 422 sans email vérifié,
 > 201 avec fiche inactive, activation par l'administrateur, accès à `/api/projets`).
-> Reste : revue, PR.
+> Suite : lot F2 ([`f2-inscription-profil.md`](f2-inscription-profil.md)).
 
 Lot backend qui prépare les écrans d'inscription et de profil (F2). Suite du plan
 [`front-end-socle.md`](front-end-socle.md). Branche `feature/utilisateur-moi`, depuis `develop`.

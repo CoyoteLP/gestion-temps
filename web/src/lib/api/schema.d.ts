@@ -20,6 +20,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/utilisateurs/moi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["findMoi"];
+        put: operations["updateMoi"];
+        post: operations["createMoi"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/taches/{id}": {
         parameters: {
             query?: never;
@@ -249,6 +265,12 @@ export interface components {
             actif?: boolean;
             audit?: components["schemas"]["AuditResponse"];
         };
+        ProfilRequest: {
+            nom: string;
+            prenom: string;
+            /** Format: int64 */
+            version: number;
+        };
         TacheRequest: {
             /** Format: int64 */
             projetId: number;
@@ -443,9 +465,9 @@ export interface components {
             du?: string;
             /** Format: date */
             au?: string;
-            periodeLimitee?: boolean;
-            periodeOrdonnee?: boolean;
             periodeComplete?: boolean;
+            periodeOrdonnee?: boolean;
+            periodeLimitee?: boolean;
         };
         ApiResponsePageResponseSaisieTempsResponse: {
             status?: string;
@@ -591,6 +613,70 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    findMoi: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseUtilisateurResponse"];
+                };
+            };
+        };
+    };
+    updateMoi: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfilRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseUtilisateurResponse"];
+                };
+            };
+        };
+    };
+    createMoi: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseUtilisateurResponse"];
                 };
             };
         };
@@ -881,6 +967,7 @@ export interface operations {
     findAll: {
         parameters: {
             query: {
+                actif?: boolean;
                 pagination: components["schemas"]["PaginationRequest"];
             };
             header?: never;

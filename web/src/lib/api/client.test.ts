@@ -50,6 +50,15 @@ describe("apiFetch", () => {
 		expect(entetes["Content-Type"]).toBeUndefined()
 	})
 
+	it("utilise le jeton explicite à la place de celui de la session", async () => {
+		fetchSimule.mockResolvedValue(Response.json({ status: "success", data: null, message: null }))
+
+		await apiFetch("/api/utilisateurs/moi", { methode: "POST", jeton: "jeton-connexion" })
+
+		const entetes = fetchSimule.mock.calls[0][1]?.headers as Record<string, string>
+		expect(entetes.Authorization).toBe("Bearer jeton-connexion")
+	})
+
 	it("envoie le corps en JSON", async () => {
 		fetchSimule.mockResolvedValue(
 			Response.json({ status: "success", data: { id: 2 }, message: null }, { status: 201 }),

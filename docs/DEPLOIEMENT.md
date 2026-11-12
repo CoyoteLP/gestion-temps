@@ -60,7 +60,10 @@ Déclarer l'API auprès du fournisseur :
    serveur SMTP configuré) et transmettre `given_name` et `family_name` (portée `profile`). L'inscrit
    crée sa fiche par `POST /api/utilisateurs/moi` ; elle reste **inactive** jusqu'à sa validation
    par un administrateur (`GET /api/utilisateurs?actif=false`, puis `PUT /api/utilisateurs/{id}`
-   avec `actif: true`). D'ici là, il n'accède qu'à sa propre fiche.
+   avec `actif: true`). D'ici là, il n'accède qu'à sa propre fiche. Le bouton « Créer un compte »
+   du front ouvre directement le formulaire d'inscription si le fournisseur prend en charge le
+   paramètre standard `prompt=create` (Keycloak 26.1 ou plus récent) ; sinon, il affiche la page de
+   connexion, d'où l'on peut encore s'inscrire.
 
 Un compte authentifié sans fiche active (inconnu, en attente, désactivé) ne lit rien d'autre que
 sa propre fiche (403), sauf s'il porte le rôle administrateur.

@@ -1,8 +1,9 @@
 # Plan : socle technique du front-end web de gestion-temps
 
-> **État (2026-11-11)** : lot F0 livré sur `feature/front-socle`, vérifié de bout en bout. Écarts
-> avec le plan initial : Next.js 16 (`proxy.ts` au lieu de `middleware.ts`) ; Auth.js gardé alors
-> qu'il est encore en bêta (`next-auth` 5.0.0-beta.32), choix à réexaminer au lot F5.
+> **État (2026-11-12)** : lots F0 (PR #16) et F1 (PR #25, backend) fusionnés ; lot F2 en cours
+> ([`f2-inscription-profil.md`](f2-inscription-profil.md)). Écarts avec le plan initial : Next.js 16
+> (`proxy.ts` au lieu de `middleware.ts`) ; Auth.js gardé alors qu'il est encore en bêta
+> (`next-auth` 5.0.0-beta.32), choix à réexaminer au lot F5.
 
 ## Contexte
 
