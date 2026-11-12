@@ -230,7 +230,8 @@ JDUPONT=$(./docker/keycloak/jeton.sh jdupont)
 curl -H "Authorization: Bearer $JDUPONT" http://localhost:8080/api/saisies-temps
 ```
 
-**Inscription en dev** : la page de connexion de Keycloak propose « S'inscrire ». Le Keycloak de
+**Inscription en dev** : la page de connexion de Keycloak propose « S'inscrire » (le front l'ouvre
+directement : voir [Front-end web](#front-end-web)). Le Keycloak de
 dev n'a pas de serveur d'emails : après l'inscription, cocher *Email verified* sur le compte dans la
 console (*Users*), puis créer la fiche avec le jeton de l'inscrit (`POST /api/utilisateurs/moi`) et
 la valider en administrateur (`PUT /api/utilisateurs/{id}` avec `actif: true`).
@@ -264,7 +265,26 @@ npm run dev                     # http://localhost:3000
 `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`.
 
 Sans session, toute page renvoie vers `/connexion` ; un compte de test (`jdupont` / `jdupont`)
-doit exister dans l'API pour que la liste des projets s'affiche. Vérifications :
+doit exister dans l'API pour que la liste des projets s'affiche.
+
+**Inscription depuis le front** : « Créer un compte » sur `/connexion` ouvre le formulaire
+d'inscription de Keycloak. À chaque connexion d'un non-administrateur, le serveur Next.js crée sa
+fiche (`POST /api/utilisateurs/moi`, inactive) si elle n'existe pas ; un échec ne bloque pas la
+connexion. Tant que la fiche n'est pas active, les pages Projets et Saisies affichent à la place
+« Inscription à finaliser » (pas de fiche : bouton pour réessayer, qui affiche la raison du refus)
+ou « Compte en attente de validation ». En dev :
+
+1. « Créer un compte », remplir le formulaire : retour connecté, « Inscription à finaliser »
+   (l'email n'est pas vérifié, faute de serveur d'emails) ;
+2. dans la console Keycloak (*Users*), cocher *Email verified*, puis « Finaliser mon inscription » :
+   « Compte en attente de validation » ;
+3. en administrateur, `PUT /api/utilisateurs/{id}` avec `actif: true` (écran prévu au lot F3), puis
+   recharger la page.
+
+La page Profil modifie le nom et le prénom de la fiche ; le mot de passe et l'email se gèrent dans
+la console de compte de Keycloak (lien « Gérer mon compte de connexion »).
+
+Vérifications :
 `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm test`, `npm run build` (lancées
 par le workflow « Front web » sur chaque pull request qui modifie `web/`). Sous Windows, lancer
 Vitest depuis un chemin en `C:\…` (majuscule), sinon aucun test n'est trouvé.

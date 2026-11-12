@@ -40,6 +40,8 @@ l'API avec le jeton de l'utilisateur. L'API n'a donc pas de CORS à ouvrir.
 src/
   app/                  routes (App Router)
     (app)/              pages authentifiées, dans la coquille (barre latérale, en-tête)
+      (compte-actif)/   pages qui appellent l'API : réservées à un compte actif ou administrateur
+      profil/           toujours accessible, même sans fiche active
     connexion/          seule page publique
     api/auth/           routes d'Auth.js
   components/           composants de l'application
@@ -47,7 +49,8 @@ src/
   hooks/                hooks React
   lib/
     api/                accès à l'API : apiFetch, ApiError, types, une fonction par appel
-    auth/               session, jetons, actions de connexion et de déconnexion
+    auth/               session, jetons, actions de connexion, d'inscription et de déconnexion
+    compte/             fiche de l'utilisateur connecté : enregistrement, profil (schéma, actions)
     constantes.ts       valeurs partagées
   auth.ts               configuration d'Auth.js (Keycloak, Authorization Code + PKCE)
   proxy.ts              protection des routes (ex-middleware) et renouvellement du jeton
@@ -62,6 +65,10 @@ src/
 - Valeur propre à chaque requête (`crypto.randomUUID()`, `Math.random()`, `Date.now()`) dans un
   rendu : la précéder de `await connection()` (`next/server`), sinon Next.js la refuse au prérendu
   (voir `apiFetch`).
+- **Compte actif** : sans fiche active, l'API refuse tout (403) sauf `/api/utilisateurs/moi`. Toute
+  page qui lit l'API se place dans le groupe `(compte-actif)`, dont le layout (`GardeCompte`)
+  affiche à la place l'état de l'inscription (« en attente de validation », « à finaliser »).
+  La fiche est créée à la connexion (événement `signIn` d'Auth.js, `enregistrerALaConnexion`).
 - `src/components/ui/` : ajouter un composant par `npx shadcn@latest add <composant>`, ne jamais
   l'éditer (ni le reformater : exclu de Prettier). Pour l'adapter, l'envelopper dans un composant
   de `src/components/`.
@@ -78,6 +85,11 @@ src/
 - Listes paginées : `PageResponse<T>` ; page lue dans l'URL avec `lirePage()`, taille `TAILLE_PAGE`.
   Le tri est imposé par l'API.
 - `PUT` : renvoyer la `version` lue ; un 409 propose de recharger la ressource.
+- Option `jeton` d'`apiFetch` : seulement quand le cookie de la requête ne porte pas encore le bon
+  jeton (connexion en cours, jeton renouvelé par `jetonAccesRenouvele` dans une Server Action) ;
+  partout ailleurs, le jeton est celui de la session.
+- Lecture partagée dans un même rendu (layout, menu, page) : l'envelopper dans `cache` de React
+  (voir `lireMonCompte`).
 - Les messages d'erreur de l'API (déjà en français, destinés à l'utilisateur) sont affichés tels
   quels, avec l'identifiant de corrélation comme référence (`AlerteErreur`). Les messages par défaut
   par statut sont dans `src/lib/api/erreurs.ts`.
@@ -111,7 +123,14 @@ src/
   `@returns`, `@throws`.
 - Dates et nombres : `date-fns` avec la locale `fr` et `Intl.NumberFormat("fr-FR")`, via
   `src/lib/format.ts`.
-- Formulaires : react-hook-form + zod, avec les mêmes bornes que les DTO de l'API.
+- Formulaires : react-hook-form + zod, avec les mêmes bornes que les DTO de l'API (schéma dans
+  `src/lib/…/schema-*.ts`, partagé par le formulaire et la Server Action, qui le revalide). Champs
+  avec `Field`, `FieldLabel`, `FieldError` de shadcn. La Server Action renvoie un état (`EtatAction` :
+  succès, invalide avec une erreur par champ, conflit 409, erreur avec référence) et appelle
+  `refresh()` (`next/cache`) après un succès ; le formulaire est remonté sur la nouvelle version
+  (`key={version}`).
+- Un fichier `"use server"` n'exporte que des fonctions async : types et valeurs initiales vont
+  dans un module à part (`etat-action.ts`).
 - Textes de l'interface en français ; `lang="fr"` sur la page.
 
 ## Accessibilité

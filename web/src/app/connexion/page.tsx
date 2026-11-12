@@ -1,11 +1,10 @@
-import { ClockIcon, LogInIcon } from "lucide-react"
+import { ClockIcon } from "lucide-react"
 import type { Metadata } from "next"
 import { Suspense } from "react"
 
 import { AlerteErreur } from "@/components/alerte-erreur"
-import { Button } from "@/components/ui/button"
+import { BoutonsConnexion } from "@/components/boutons-connexion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { seConnecter } from "@/lib/auth/actions"
 import { messageErreurConnexion } from "@/lib/auth/erreurs-connexion"
 import { cheminDepuisUrl } from "@/lib/auth/redirection"
 
@@ -21,11 +20,11 @@ export default function PageConnexion({ searchParams }: PageProps<"/connexion">)
 					</span>
 					<CardTitle className="text-xl">Gestion des temps</CardTitle>
 					<CardDescription>
-						Connectez-vous pour saisir et suivre votre temps de travail.
+						Connectez-vous pour saisir et suivre votre temps de travail, ou créez votre compte.
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<Suspense fallback={<BoutonConnexion retour="" />}>
+					<Suspense fallback={<BoutonsConnexion retour="" />}>
 						<FormulaireConnexion searchParams={searchParams} />
 					</Suspense>
 				</CardContent>
@@ -41,18 +40,7 @@ async function FormulaireConnexion({ searchParams }: Pick<PageProps<"/connexion"
 	return (
 		<div className="flex flex-col gap-4">
 			{erreur && <AlerteErreur titre="Connexion impossible" message={erreur} />}
-			<BoutonConnexion retour={cheminDepuisUrl(callbackUrl)} />
+			<BoutonsConnexion retour={cheminDepuisUrl(callbackUrl)} />
 		</div>
-	)
-}
-
-function BoutonConnexion({ retour }: { retour: string }) {
-	return (
-		<form action={seConnecter}>
-			<input type="hidden" name="retour" value={retour} />
-			<Button type="submit" className="w-full">
-				<LogInIcon /> Se connecter
-			</Button>
-		</form>
 	)
 }

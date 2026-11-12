@@ -1,7 +1,13 @@
 import type { JWT } from "next-auth/jwt"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { estAdministrateur, expirationProche, rafraichirJeton, rolesDuJeton } from "./jeton"
+import {
+	estAdministrateur,
+	expirationProche,
+	jetonsRenouvelesDe,
+	rafraichirJeton,
+	rolesDuJeton,
+} from "./jeton"
 import { oublierConfigurationOidc } from "./oidc"
 
 /** Jeton JWT non signé portant la charge donnée (seule la charge est lue). */
@@ -140,5 +146,37 @@ describe("rafraichirJeton", () => {
 			"RenouvellementImpossible",
 		)
 		expect(fetchSimule).not.toHaveBeenCalled()
+	})
+})
+
+describe("jetonsRenouvelesDe", () => {
+	const jetons = {
+		accessToken: "acces",
+		expiresAt: 1_800_000_000,
+		estAdmin: false,
+		refreshToken: "renouvellement",
+		idToken: "identite",
+	}
+
+	it("lit les jetons renouvelés d'une mise à jour de session", () => {
+		expect(jetonsRenouvelesDe({ jetonsRenouveles: jetons })).toEqual(jetons)
+	})
+
+	it("ignore les champs étrangers et les jetons facultatifs mal typés", () => {
+		expect(
+			jetonsRenouvelesDe({
+				jetonsRenouveles: { ...jetons, refreshToken: 3, idToken: undefined, erreur: "x" },
+			}),
+		).toEqual({ accessToken: "acces", expiresAt: 1_800_000_000, estAdmin: false })
+	})
+
+	it.each([
+		["données absentes", undefined],
+		["autre mise à jour de session", { user: { name: "Jean" } }],
+		["jeton d'accès manquant", { jetonsRenouveles: { ...jetons, accessToken: undefined } }],
+		["expiration qui n'est pas un nombre", { jetonsRenouveles: { ...jetons, expiresAt: "demain" } }],
+		["rôle administrateur absent", { jetonsRenouveles: { ...jetons, estAdmin: undefined } }],
+	])("refuse : %s", (_cas, donnees) => {
+		expect(jetonsRenouvelesDe(donnees)).toBeNull()
 	})
 })

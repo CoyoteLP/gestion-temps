@@ -15,6 +15,12 @@ export type OptionsRequete = {
 	methode?: "GET" | "POST" | "PUT" | "DELETE"
 	parametres?: Record<string, ParametreRequete>
 	corps?: unknown
+	/**
+	 * Jeton d'accès à utiliser à la place de celui de la session, quand le cookie de la requête ne
+	 * le porte pas encore : connexion en cours (`enregistrerALaConnexion`) ou jeton que la Server
+	 * Action vient de renouveler (`finaliserInscription`).
+	 */
+	jeton?: string
 }
 
 /**
@@ -23,7 +29,7 @@ export type OptionsRequete = {
  * lit l'enveloppe `ApiResponse`.
  *
  * @param chemin  chemin de l'API, ex. `/api/projets`
- * @param options méthode, paramètres de requête, corps JSON
+ * @param options méthode, paramètres de requête, corps JSON, jeton explicite
  * @returns le champ `data` de la réponse
  * @throws ApiError si l'API répond une erreur ou est injoignable (le message est affichable)
  */
@@ -34,7 +40,7 @@ export async function apiFetch<T>(chemin: string, options: OptionsRequete = {}):
 	const identifiantCorrelation = crypto.randomUUID()
 	const entetes: Record<string, string> = {
 		Accept: "application/json",
-		Authorization: `Bearer ${await jetonAcces()}`,
+		Authorization: `Bearer ${options.jeton ?? (await jetonAcces())}`,
 		[EN_TETE_CORRELATION]: identifiantCorrelation,
 	}
 	if (options.corps !== undefined) {

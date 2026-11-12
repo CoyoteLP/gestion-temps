@@ -13,9 +13,13 @@ type Reponse<T, Nullables extends keyof T = never> = {
 
 export type Audit = Reponse<Schemas["AuditResponse"], "modifieLe" | "modifiePar">
 
-export type Projet = Omit<
-	Reponse<Schemas["ProjetResponse"], "description" | "dateDebut" | "dateFin">,
-	"audit"
-> & {
-	audit: Audit
-}
+/** `audit` n'est renvoyé qu'aux administrateurs : `null` pour les autres. */
+type AvecAudit<T> = Omit<T, "audit"> & { audit: Audit | null }
+
+export type Projet = AvecAudit<Reponse<Schemas["ProjetResponse"], "description" | "dateDebut" | "dateFin">>
+
+/** Fiche utilisateur ; `actif: false` = en attente de validation par un administrateur, ou désactivée. */
+export type Utilisateur = AvecAudit<Reponse<Schemas["UtilisateurResponse"]>>
+
+/** Modification de son propre profil (`PUT /api/utilisateurs/moi`). */
+export type ProfilRequest = Schemas["ProfilRequest"]

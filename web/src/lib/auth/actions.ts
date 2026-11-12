@@ -4,7 +4,7 @@ import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { signIn, signOut } from "@/auth"
-import { PAGE_CONNEXION } from "@/lib/constantes"
+import { PAGE_CONNEXION, PROMPT_INSCRIPTION } from "@/lib/constantes"
 
 import { configurationOidc } from "./oidc"
 import { cheminDeRetour } from "./redirection"
@@ -17,6 +17,20 @@ import { lireJeton } from "./session"
  */
 export async function seConnecter(formulaire: FormData): Promise<void> {
 	await signIn("keycloak", { redirectTo: cheminDeRetour(formulaire.get("retour")) })
+}
+
+/**
+ * Ouvre directement le formulaire d'inscription du fournisseur OIDC (`prompt=create`) ; une fois
+ * le compte créé, l'utilisateur revient connecté sur la page demandée.
+ *
+ * @param formulaire champ `retour` : chemin relatif de la page demandée avant l'inscription
+ */
+export async function sInscrire(formulaire: FormData): Promise<void> {
+	await signIn(
+		"keycloak",
+		{ redirectTo: cheminDeRetour(formulaire.get("retour")) },
+		{ prompt: PROMPT_INSCRIPTION },
+	)
 }
 
 /**

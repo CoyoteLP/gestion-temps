@@ -1,7 +1,8 @@
 import NextAuth from "next-auth"
 import Keycloak from "next-auth/providers/keycloak"
 
-import { estAdministrateur, expirationProche, rafraichirJeton } from "@/lib/auth/jeton"
+import { estAdministrateur, expirationProche, jetonsRenouvelesDe, rafraichirJeton } from "@/lib/auth/jeton"
+import { enregistrerALaConnexion } from "@/lib/compte/enregistrement"
 import { PAGE_CONNEXION } from "@/lib/constantes"
 
 /**
@@ -11,7 +12,7 @@ import { PAGE_CONNEXION } from "@/lib/constantes"
  * Configuration par variables d'environnement : `AUTH_SECRET`, `AUTH_KEYCLOAK_ID`,
  * `AUTH_KEYCLOAK_ISSUER`, `AUTH_KEYCLOAK_SECRET` (client confidentiel seulement).
  */
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
 	providers: [
 		Keycloak({
 			client: {
@@ -22,8 +23,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 	],
 	pages: { signIn: PAGE_CONNEXION, error: PAGE_CONNEXION },
 	session: { strategy: "jwt" },
+	events: {
+		/** Première connexion d'un inscrit : création de sa fiche (inactive) dans l'API. */
+		async signIn({ account }) {
+			await enregistrerALaConnexion(account?.access_token)
+		},
+	},
 	callbacks: {
-		async jwt({ token, account }) {
+		async jwt({ token, account, trigger, session }) {
+			if (trigger === "update") {
+				// Renouvellement forcé par une Server Action (jetonAccesRenouvele) : jetons à enregistrer
+				const jetons = jetonsRenouvelesDe(session)
+				return jetons ? { ...token, ...jetons, erreur: undefined } : token
+			}
 			if (account?.access_token) {
 				return {
 					...token,
