@@ -6,7 +6,7 @@ import { useActionState } from "react"
 import { AlerteErreur } from "@/components/alerte-erreur"
 import { Button } from "@/components/ui/button"
 import { finaliserInscription } from "@/lib/compte/actions"
-import { ETAT_INITIAL } from "@/lib/compte/etat-action"
+import { ETAT_INITIAL } from "@/lib/actions/etat-action"
 
 /** Bouton qui crée la fiche de l'utilisateur connecté ; affiche le refus de l'API tel quel. */
 export function FinaliserInscription() {

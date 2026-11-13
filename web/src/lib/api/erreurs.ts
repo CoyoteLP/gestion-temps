@@ -40,3 +40,22 @@ export class ApiError extends Error {
 		this.name = "ApiError"
 	}
 }
+
+/**
+ * Attend une lecture de l'API sans lever d'exception pour une erreur de l'API, que le composant
+ * affiche alors (`AlerteErreur`).
+ *
+ * @param lecture appel à l'API en cours
+ * @returns la valeur lue, ou l'erreur de l'API
+ * @throws toute autre erreur (erreur de programmation, redirection de Next.js)
+ */
+export async function valeurOuErreurApi<T>(lecture: Promise<T>): Promise<T | ApiError> {
+	try {
+		return await lecture
+	} catch (erreur) {
+		if (erreur instanceof ApiError) {
+			return erreur
+		}
+		throw erreur
+	}
+}

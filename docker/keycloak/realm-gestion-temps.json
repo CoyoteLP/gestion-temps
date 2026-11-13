@@ -102,7 +102,7 @@
 			"firstName": "Alice",
 			"lastName": "Admin",
 			"enabled": true,
-			"realmRoles": ["ADMIN"],
+			"realmRoles": ["ADMIN", "default-roles-gestion-temps"],
 			"credentials": [
 				{
 					"type": "password",
@@ -118,6 +118,7 @@
 			"firstName": "Jean",
 			"lastName": "Dupont",
 			"enabled": true,
+			"realmRoles": ["default-roles-gestion-temps"],
 			"credentials": [
 				{
 					"type": "password",
@@ -133,6 +134,7 @@
 			"firstName": "Paul",
 			"lastName": "Martin",
 			"enabled": true,
+			"realmRoles": ["default-roles-gestion-temps"],
 			"credentials": [
 				{
 					"type": "password",

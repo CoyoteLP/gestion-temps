@@ -1,19 +1,18 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { RotateCwIcon, SaveIcon } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { SaveIcon } from "lucide-react"
 import { useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 
+import { AlerteConflit } from "@/components/alerte-conflit"
 import { AlerteErreur } from "@/components/alerte-erreur"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { modifierProfil } from "@/lib/compte/actions"
-import { ETAT_INITIAL, type EtatAction } from "@/lib/compte/etat-action"
+import { ETAT_INITIAL, type EtatAction } from "@/lib/actions/etat-action"
 import { schemaProfil, type Profil } from "@/lib/compte/schema-profil"
 import { DUREE_MESSAGE_SUCCES_MS } from "@/lib/constantes"
 
@@ -31,9 +30,8 @@ type Props = Readonly<
  * rafraîchie : le parent doit remonter le formulaire sur la nouvelle version (`key={version}`).
  */
 export function FormulaireProfil({ nom, prenom, version }: Props) {
-	const router = useRouter()
 	const [enCours, demarrer] = useTransition()
-	const [etat, setEtat] = useState<EtatAction>(ETAT_INITIAL)
+	const [etat, setEtat] = useState<EtatAction<keyof Profil>>(ETAT_INITIAL)
 	const formulaire = useForm<Profil>({
 		resolver: zodResolver(schemaProfil),
 		defaultValues: { nom, prenom },
@@ -57,21 +55,7 @@ export function FormulaireProfil({ nom, prenom, version }: Props) {
 	return (
 		<form onSubmit={formulaire.handleSubmit(enregistrer)} noValidate className="flex flex-col gap-4">
 			{etat.statut === "conflit" && (
-				<Alert variant="destructive">
-					<AlertTitle>Profil modifié entre-temps</AlertTitle>
-					<AlertDescription>
-						<p>{etat.message}</p>
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							className="mt-2"
-							onClick={() => router.refresh()}
-						>
-							<RotateCwIcon /> Recharger
-						</Button>
-					</AlertDescription>
-				</Alert>
+				<AlerteConflit titre="Profil modifié entre-temps" message={etat.message} />
 			)}
 			{etat.statut === "erreur" && (
 				<AlerteErreur

@@ -1,7 +1,8 @@
 # Plan : socle technique du front-end web de gestion-temps
 
-> **État (2026-11-12)** : lots F0 (PR #16) et F1 (PR #25, backend) fusionnés ; lot F2 en cours
-> ([`f2-inscription-profil.md`](f2-inscription-profil.md)). Écarts avec le plan initial : Next.js 16
+> **État (2026-11-13)** : lots F0 (PR #16), F1 (PR #25, backend) et F2 (PR #27,
+> [`f2-inscription-profil.md`](f2-inscription-profil.md)) fusionnés ; lot F3 en cours
+> ([`f3-projets-taches.md`](f3-projets-taches.md)). Écarts avec le plan initial : Next.js 16
 > (`proxy.ts` au lieu de `middleware.ts`) ; Auth.js gardé alors qu'il est encore en bêta
 > (`next-auth` 5.0.0-beta.32), choix à réexaminer au lot F5.
 
@@ -148,6 +149,21 @@ Aucun code Java ne change dans ce lot.
   aujourd'hui tout authentifié lit la liste de tous les utilisateurs, emails compris.
 - **F2** : écrans connexion et inscription, page Profil (consultation et modification).
 - **F3** : projets et tâches. Consultation pour tous, création et modification réservées aux administrateurs.
+- **F3b (backend puis front) : tri et filtres des listes** (demandé le 2026-11-14, après la
+  fusion de F3). Décisions prises avec vous :
+  - **par l'API**, pour que le tri et le filtre portent sur toute la liste et non sur la page
+    affichée : paramètres de tri (colonne, sens) et filtres par colonne sur les listes paginées
+    (projets, utilisateurs, tâches, puis saisies en F4). Chaque ressource déclare une **liste
+    blanche** de colonnes triables et filtrables ; une valeur hors liste donne 400. Tri par défaut
+    inchangé. Requêtes JPQL ou Specifications dans les repositories (jamais de SQL natif ni de
+    concaténation). La convention de `CLAUDE.md` « le tri est imposé par le service, jamais choisi
+    par le client » est reformulée en conséquence ;
+  - **front** : clic sur un en-tête de colonne triable (premier clic croissant, second décroissant,
+    icône ↑ ou ↓, `aria-sort`) ; filtre en tête de colonne **selon le type** : zone « contient »
+    pour le texte (code, nom, email…), liste Tous / Actif / Inactif pour le statut, pas de filtre
+    de date au départ ; filtre appliqué après une courte pause de frappe ; tri et filtres conservés
+    dans l'URL (avec la page, remise à 1 à chaque changement) ;
+  - un composant de tableau commun à toutes les listes de l'application.
 - **F4** : saisies de temps (choix du projet puis de la tâche, saisie par jour ou par semaine,
   total journalier, mois clôturés en lecture seule).
 - **F5** : déploiement du front (sortie `standalone`, image, `docs/DEPLOIEMENT.md`) et tests E2E Playwright.

@@ -3,7 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { apiFetch } from "./client"
 import { ApiError } from "./erreurs"
 import type { Utilisateur } from "./modeles"
-import { enregistrerMonCompte, lireMonCompte, modifierMonProfil } from "./utilisateurs"
+import {
+	enregistrerMonCompte,
+	lireMonCompte,
+	lireUtilisateur,
+	listerTousLesUtilisateursActifs,
+	listerUtilisateurs,
+	modifierMonProfil,
+	modifierUtilisateur,
+} from "./utilisateurs"
 
 vi.mock("./client", () => ({ apiFetch: vi.fn() }))
 
@@ -81,5 +89,59 @@ describe("modifierMonProfil", () => {
 			methode: "PUT",
 			corps: { nom: "Durand", prenom: "Jeanne", version: 2 },
 		})
+	})
+})
+
+describe("listerUtilisateurs", () => {
+	it("filtre sur le statut demandé", async () => {
+		await listerUtilisateurs(false, 2)
+
+		expect(apiFetchSimule).toHaveBeenCalledWith("/api/utilisateurs", {
+			parametres: { actif: false, page: 2, taille: 20 },
+		})
+	})
+
+	it("liste toutes les fiches sans filtre", async () => {
+		await listerUtilisateurs(undefined, 1)
+
+		expect(apiFetchSimule).toHaveBeenCalledWith("/api/utilisateurs", {
+			parametres: { actif: undefined, page: 1, taille: 20 },
+		})
+	})
+})
+
+describe("listerTousLesUtilisateursActifs", () => {
+	it("lit toutes les pages des fiches actives, par 100", async () => {
+		apiFetchSimule
+			.mockResolvedValueOnce({ contenu: [fiche], page: 1, taille: 100, total: 2, pages: 2 })
+			.mockResolvedValueOnce({
+				contenu: [{ ...fiche, id: 8 }],
+				page: 2,
+				taille: 100,
+				total: 2,
+				pages: 2,
+			})
+
+		await expect(listerTousLesUtilisateursActifs()).resolves.toHaveLength(2)
+		expect(apiFetchSimule).toHaveBeenLastCalledWith("/api/utilisateurs", {
+			parametres: { actif: true, page: 2, taille: 100 },
+		})
+	})
+})
+
+describe("fiche d'un utilisateur", () => {
+	it("lit une fiche par son identifiant", async () => {
+		apiFetchSimule.mockResolvedValue(fiche)
+
+		await expect(lireUtilisateur(7)).resolves.toEqual(fiche)
+		expect(apiFetchSimule).toHaveBeenCalledWith("/api/utilisateurs/7")
+	})
+
+	it("renvoie la fiche complète avec la version lue", async () => {
+		const corps = { email: fiche.email, nom: "Dupont", prenom: "Jean", actif: false, version: 2 }
+
+		await modifierUtilisateur(7, corps)
+
+		expect(apiFetchSimule).toHaveBeenCalledWith("/api/utilisateurs/7", { methode: "PUT", corps })
 	})
 })
