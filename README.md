@@ -164,7 +164,8 @@ s'applique qu'à une saisie nouvelle ou déplacée (autre jour ou autre tâche).
 ### Clôture mensuelle
 
 Un mois **terminé** peut être clôturé pour un projet (`POST /api/clotures` avec `projetId` et `mois`,
-ex. `"2026-10"`) par un administrateur ou un membre du projet (MANAGER, BACKUP). Un administrateur
+ex. `"2026-10"`) par un administrateur, un responsable ou un suppléant du projet (MANAGER, BACKUP ;
+pas un contributeur). Un administrateur
 peut clôturer d'un coup tous les projets actifs qui ne le sont pas encore
 (`POST /api/clotures/tous-projets` avec `mois`, 201 avec la liste des clôtures créées). Ensuite, les
 saisies de ce mois sur ce projet ne peuvent plus être créées, modifiées, déplacées (vers ou depuis ce
@@ -183,15 +184,20 @@ Sans jeton valide (signature, émetteur, audience, expiration) : 401.
 - **Rôle administrateur** : la revendication des rôles du jeton (`roles` par défaut, configurable
   par `OIDC_ROLES_CLAIM`, ex. `realm_access.roles` pour Keycloak) contient `ADMIN`. L'administrateur
   gère les projets, tâches, utilisateurs et membres, et accède à toutes les saisies.
-- **Collaborateur** : tout autre utilisateur authentifié, dont la fiche est **active**. Il lit les
-  projets, tâches et membres, et sa propre fiche (`/api/utilisateurs/moi`) ; il crée, modifie et
-  supprime **ses** saisies, et consulte en plus celles des projets dont il est membre (filtre
+- **Collaborateur** : tout autre utilisateur authentifié, dont la fiche est **active**. Il ne lit
+  que les projets **dont il est membre**, avec leurs tâches, membres et clôtures (listes
+  restreintes ; 403 « Vous n'êtes pas membre de ce projet » sur un autre projet), et sa propre fiche
+  (`/api/utilisateurs/moi`). Il crée, modifie et supprime **ses** saisies, sur les projets dont il
+  est membre, et consulte en plus celles des projets dont il est responsable ou suppléant (filtre
   `projetId` ou `tacheId`). La liste et le détail des utilisateurs, et toute autre écriture : 403.
 - **Compte sans fiche active** (inconnu, inscrit en attente de validation, désactivé) : il n'accède
   qu'à sa propre fiche (`/api/utilisateurs/moi`) ; tout le reste renvoie 403, avec un message qui
   en donne la raison. Un administrateur n'a pas besoin de fiche.
 - **Membres d'un projet** (`/api/projets/{projetId}/membres`) : un utilisateur avec un rôle de
-  projet `MANAGER` ou `BACKUP` (mêmes droits aujourd'hui).
+  projet. `MANAGER` (responsable) et `BACKUP` (suppléant) consultent les saisies de tous les
+  membres et clôturent les mois du projet ; `CONTRIBUTEUR` voit le projet et y saisit son temps.
+  Seul un membre (tout rôle) peut saisir du temps sur le projet, y compris quand l'administrateur
+  saisit pour lui (sinon 422) ; une saisie existante reste corrigeable après son retrait.
 - **Rattachement du compte** : l'administrateur crée l'utilisateur avec son email ; à la première
   connexion, l'API le retrouve par l'email du jeton puis mémorise l'identifiant du compte (`sub`).
   L'email doit être déclaré vérifié par le fournisseur (`email_verified: true`) ; pour un

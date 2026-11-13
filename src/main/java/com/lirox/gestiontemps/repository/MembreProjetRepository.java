@@ -1,5 +1,6 @@
 package com.lirox.gestiontemps.repository;
 
+import java.util.Collection;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -7,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.lirox.gestiontemps.domain.MembreProjet;
+import com.lirox.gestiontemps.domain.RoleProjet;
 
 /**
  * Accès aux données des membres de projet.
@@ -33,6 +35,14 @@ public interface MembreProjetRepository extends JpaRepository<MembreProjet, Long
 	 * @return true si l'utilisateur est membre du projet, quel que soit son rôle
 	 */
 	boolean existsByProjetIdAndUtilisateurId(Long projetId, Long utilisateurId);
+
+	/**
+	 * @param projetId      identifiant du projet
+	 * @param utilisateurId identifiant de l'utilisateur
+	 * @param roles         rôles recherchés
+	 * @return true si l'utilisateur est membre du projet avec l'un de ces rôles
+	 */
+	boolean existsByProjetIdAndUtilisateurIdAndRoleIn(Long projetId, Long utilisateurId, Collection<RoleProjet> roles);
 
 	/**
 	 * Contrôle d'unicité lors d'une modification.

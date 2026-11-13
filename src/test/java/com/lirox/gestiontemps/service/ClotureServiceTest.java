@@ -28,7 +28,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.lirox.gestiontemps.common.Constantes;
+import com.lirox.gestiontemps.domain.MembreProjet;
 import com.lirox.gestiontemps.domain.Projet;
+import com.lirox.gestiontemps.domain.RoleProjet;
 import com.lirox.gestiontemps.domain.SaisieTemps;
 import com.lirox.gestiontemps.domain.Tache;
 import com.lirox.gestiontemps.domain.Utilisateur;
@@ -38,6 +40,7 @@ import com.lirox.gestiontemps.dto.SaisieTempsRequest;
 import com.lirox.gestiontemps.dto.SaisieTempsResponse;
 import com.lirox.gestiontemps.exception.BusinessRuleException;
 import com.lirox.gestiontemps.repository.ClotureRepository;
+import com.lirox.gestiontemps.repository.MembreProjetRepository;
 import com.lirox.gestiontemps.repository.ProjetRepository;
 import com.lirox.gestiontemps.repository.SaisieTempsRepository;
 import com.lirox.gestiontemps.repository.TacheRepository;
@@ -68,6 +71,9 @@ class ClotureServiceTest {
 	private ProjetRepository projetRepository;
 
 	@Autowired
+	private MembreProjetRepository membreProjetRepository;
+
+	@Autowired
 	private TacheRepository tacheRepository;
 
 	@Autowired
@@ -92,6 +98,7 @@ class ClotureServiceTest {
 		SecurityContextHolder.clearContext();
 		saisieTempsRepository.deleteAll();
 		clotureRepository.deleteAll();
+		membreProjetRepository.deleteAll();
 		tacheRepository.deleteAll();
 		projetRepository.deleteAll();
 		utilisateurRepository.deleteAll();
@@ -105,6 +112,7 @@ class ClotureServiceTest {
 	void uneClotureAttendLaFinDesSaisiesEnCoursPuisLesSuivantesSontRefusees() throws Exception {
 		Tache tache = saveTache("PRJ-CLOT");
 		Utilisateur utilisateur = saveUtilisateur();
+		rendreMembre(utilisateur, tache);
 		Long projetId = tache.getProjet().getId();
 		YearMonth moisTermine = YearMonth.now(ZoneId.of(Constantes.FUSEAU_HORAIRE)).minusMonths(1);
 		CountDownLatch verrouPose = new CountDownLatch(1);
@@ -135,7 +143,8 @@ class ClotureServiceTest {
 
 		SaisieTempsRequest request = new SaisieTempsRequest(utilisateur.getId(), tache.getId(),
 				moisTermine.atDay(10), BigDecimal.ONE, null, null);
-		assertThatThrownBy(() -> saisieTempsService.create(request)).isInstanceOf(BusinessRuleException.class);
+		assertThatThrownBy(() -> saisieTempsService.create(request)).isInstanceOf(BusinessRuleException.class)
+				.hasMessageContaining("est clôturé pour le projet");
 		assertThat(saisieTempsRepository.count()).isZero();
 	}
 
@@ -152,6 +161,8 @@ class ClotureServiceTest {
 		Tache tacheB = saveTache("PRJ-B");
 		assertThat(tacheA.getProjet().getId()).isLessThan(tacheB.getProjet().getId());
 		Utilisateur utilisateur = saveUtilisateur();
+		rendreMembre(utilisateur, tacheA);
+		rendreMembre(utilisateur, tacheB);
 		LocalDate jour = LocalDate.now(ZoneId.of(Constantes.FUSEAU_HORAIRE));
 		SaisieTemps saisie = saveSaisie(utilisateur, tacheB, jour);
 		CountDownLatch aVerrouille = new CountDownLatch(1);
@@ -183,6 +194,15 @@ class ClotureServiceTest {
 			deplacementLance.countDown();
 			executor.shutdownNow();
 		}
+	}
+
+	/** Seul un membre du projet peut y saisir du temps. */
+	private void rendreMembre(Utilisateur utilisateur, Tache tache) {
+		MembreProjet membre = new MembreProjet();
+		membre.setProjet(tache.getProjet());
+		membre.setUtilisateur(utilisateur);
+		membre.setRole(RoleProjet.CONTRIBUTEUR);
+		membreProjetRepository.save(membre);
 	}
 
 	private static void attendre(CountDownLatch latch) {

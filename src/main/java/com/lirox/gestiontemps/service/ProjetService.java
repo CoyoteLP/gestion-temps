@@ -2,6 +2,8 @@ package com.lirox.gestiontemps.service;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,6 +13,7 @@ import com.lirox.gestiontemps.dto.PageResponse;
 import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.ProjetRequest;
 import com.lirox.gestiontemps.dto.ProjetResponse;
+import com.lirox.gestiontemps.exception.AccesRefuseException;
 import com.lirox.gestiontemps.exception.DuplicateResourceException;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.exception.ResourceInUseException;
@@ -24,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * Gestion des projets : unicité du code et interdiction de supprimer un projet qui a des tâches.
+ * Un collaborateur ne lit que les projets dont il est membre ({@link AccesProjetService}).
  */
 @Service
 @RequiredArgsConstructor
@@ -34,23 +38,31 @@ public class ProjetService {
 	private final TacheRepository tacheRepository;
 	private final MembreProjetRepository membreProjetRepository;
 	private final ClotureRepository clotureRepository;
+	private final AccesProjetService accesProjetService;
 
 	/**
 	 * @param pagination page demandée
-	 * @return une page de projets, par identifiant croissant
+	 * @return une page de projets, par identifiant croissant : tous pour un administrateur, ceux dont
+	 *         il est membre pour un collaborateur
 	 */
 	public PageResponse<ProjetResponse> findAll(PaginationRequest pagination) {
-		return PageResponse.from(projetRepository.findAll(pagination.versPageRequest(Sort.by("id"))),
-				ProjetResponse::from);
+		PageRequest page = pagination.versPageRequest(Sort.by("id"));
+		Long utilisateurId = accesProjetService.utilisateurRestreint();
+		Page<Projet> projets = utilisateurId == null ? projetRepository.findAll(page)
+				: projetRepository.findDontMembre(utilisateurId, page);
+		return PageResponse.from(projets, ProjetResponse::from);
 	}
 
 	/**
 	 * @param id identifiant du projet
 	 * @return le projet
 	 * @throws ResourceNotFoundException si le projet n'existe pas
+	 * @throws AccesRefuseException      si l'appelant n'est ni administrateur ni membre du projet
 	 */
 	public ProjetResponse findById(Long id) {
-		return ProjetResponse.from(getProjet(id));
+		Projet projet = getProjet(id);
+		accesProjetService.verifierAcces(projet.getId());
+		return ProjetResponse.from(projet);
 	}
 
 	/**

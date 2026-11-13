@@ -1,5 +1,6 @@
 package com.lirox.gestiontemps.controller;
 
+import static com.lirox.gestiontemps.JetonsDeTest.collaborateur;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -29,9 +30,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.lirox.gestiontemps.JetonsDeTest;
 import com.lirox.gestiontemps.common.Constantes;
+import com.lirox.gestiontemps.domain.MembreProjet;
 import com.lirox.gestiontemps.domain.Projet;
+import com.lirox.gestiontemps.domain.RoleProjet;
+import com.lirox.gestiontemps.domain.Utilisateur;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
+import com.lirox.gestiontemps.repository.MembreProjetRepository;
 import com.lirox.gestiontemps.repository.ProjetRepository;
+import com.lirox.gestiontemps.repository.UtilisateurRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -45,6 +51,12 @@ class ProjetControllerTest {
 
 	@Autowired
 	private ProjetRepository projetRepository;
+
+	@Autowired
+	private UtilisateurRepository utilisateurRepository;
+
+	@Autowired
+	private MembreProjetRepository membreProjetRepository;
 
 	@Test
 	void createRetourne201AvecLocation() throws Exception {
@@ -348,6 +360,65 @@ class ProjetControllerTest {
 		projet.setCode(code);
 		projet.setNom("Projet " + code);
 		return projetRepository.save(projet);
+	}
+
+	// Visibilité : un collaborateur ne voit que les projets dont il est membre
+
+	@Test
+	void unCollaborateurNeVoitQueLesProjetsDontIlEstMembre() throws Exception {
+		Projet sien = save("PRJ-01");
+		Projet autre = save("PRJ-02");
+		Utilisateur contributeur = saveMembre(sien, "cdurand@lirox.com", RoleProjet.CONTRIBUTEUR);
+
+		mockMvc.perform(get("/api/projets").with(collaborateur(contributeur)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.total").value(1))
+				.andExpect(jsonPath("$.data.contenu[0].code").value("PRJ-01"));
+		mockMvc.perform(get("/api/projets/{id}", sien.getId()).with(collaborateur(contributeur)))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/projets/{id}", autre.getId()).with(collaborateur(contributeur)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message").value("Vous n'êtes pas membre de ce projet"));
+		mockMvc.perform(get("/api/projets/{id}", 9999).with(collaborateur(contributeur)))
+				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void unCollaborateurMembreDAucunProjetNEnVoitAucun() throws Exception {
+		Projet projet = save("PRJ-01");
+		Utilisateur contributeur = saveMembre(projet, "cdurand@lirox.com", RoleProjet.CONTRIBUTEUR);
+		membreProjetRepository.deleteByUtilisateurId(contributeur.getId());
+
+		mockMvc.perform(get("/api/projets").with(collaborateur(contributeur)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.total").value(0));
+	}
+
+	@Test
+	void lAdministrateurVoitTousLesProjets() throws Exception {
+		Projet projet = save("PRJ-01");
+		save("PRJ-02");
+		saveMembre(projet, "cdurand@lirox.com", RoleProjet.MANAGER);
+
+		mockMvc.perform(get("/api/projets"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.total").value(2));
+	}
+
+	/** Collaborateur dont le compte OIDC est rattaché (sujet renseigné), membre du projet avec ce rôle. */
+	private Utilisateur saveMembre(Projet p, String email, RoleProjet role) {
+		Utilisateur u = new Utilisateur();
+		u.setEmail(email);
+		u.setNom("Durand");
+		u.setPrenom("Claire");
+		u.setSujet("sujet-" + email);
+		utilisateurRepository.save(u);
+		MembreProjet membre = new MembreProjet();
+		membre.setProjet(p);
+		membre.setUtilisateur(u);
+		membre.setRole(role);
+		membreProjetRepository.save(membre);
+		return u;
 	}
 
 }
