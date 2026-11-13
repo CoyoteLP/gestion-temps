@@ -2,7 +2,7 @@ import "server-only"
 
 import { getToken, type JWT } from "next-auth/jwt"
 import { headers } from "next/headers"
-import { redirect } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { cache } from "react"
 
 import { auth, unstable_update } from "@/auth"
@@ -64,6 +64,17 @@ export const utilisateurCourant = cache(async (): Promise<UtilisateurConnecte> =
 		estAdmin: session.estAdmin,
 	}
 })
+
+/**
+ * Réserve une page à l'administrateur : un autre utilisateur reçoit la page « introuvable », comme
+ * pour une adresse inconnue. Ce n'est qu'un confort d'affichage : l'API refuse de toute façon les
+ * appels non autorisés.
+ */
+export async function exigerAdmin(): Promise<void> {
+	if (!(await utilisateurCourant()).estAdmin) {
+		notFound()
+	}
+}
 
 /**
  * Renouvelle le jeton d'accès auprès du fournisseur, même s'il n'a pas expiré, et l'enregistre

@@ -96,13 +96,14 @@
 	],
 	"users": [
 		{
+			"id": "9966a19e-edcd-4e73-93ed-9ce5cb5687e7",
 			"username": "admin",
 			"email": "admin@lirox.test",
 			"emailVerified": true,
 			"firstName": "Alice",
 			"lastName": "Admin",
 			"enabled": true,
-			"realmRoles": ["ADMIN"],
+			"realmRoles": ["ADMIN", "default-roles-gestion-temps"],
 			"credentials": [
 				{
 					"type": "password",
@@ -112,12 +113,14 @@
 			]
 		},
 		{
+			"id": "2f574753-ab31-4e31-8a12-77e86a92577f",
 			"username": "jdupont",
 			"email": "jdupont@lirox.test",
 			"emailVerified": true,
 			"firstName": "Jean",
 			"lastName": "Dupont",
 			"enabled": true,
+			"realmRoles": ["default-roles-gestion-temps"],
 			"credentials": [
 				{
 					"type": "password",
@@ -127,12 +130,14 @@
 			]
 		},
 		{
+			"id": "dfc20902-5ca0-4f00-abf0-8b2cfea5980a",
 			"username": "pmartin",
 			"email": "pmartin@lirox.test",
 			"emailVerified": true,
 			"firstName": "Paul",
 			"lastName": "Martin",
 			"enabled": true,
+			"realmRoles": ["default-roles-gestion-temps"],
 			"credentials": [
 				{
 					"type": "password",

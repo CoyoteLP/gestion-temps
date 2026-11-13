@@ -41,3 +41,21 @@ export function initiales(nom: string): string {
 		.map((mot) => mot[0].toUpperCase())
 		.join("")
 }
+
+/**
+ * @param personne prénom et nom d'une fiche utilisateur
+ * @returns le nom complet (« Léa Martin »)
+ */
+export function nomComplet(personne: Readonly<{ prenom: string; nom: string }>): string {
+	return `${personne.prenom} ${personne.nom}`
+}
+
+/**
+ * @param personne fiche utilisateur
+ * @returns le nom complet suivi de l'email, pour distinguer deux homonymes dans un choix
+ */
+export function formaterUtilisateur(
+	personne: Readonly<{ prenom: string; nom: string; email: string }>,
+): string {
+	return `${nomComplet(personne)} — ${personne.email}`
+}

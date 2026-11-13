@@ -1,9 +1,9 @@
-"use client"
-
-import { ClockIcon, FolderKanbanIcon, UserIcon } from "lucide-react"
+import { ClockIcon, FolderKanbanIcon, UserIcon, UsersIcon } from "lucide-react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { Suspense } from "react"
 
+import { EntreeNavigation } from "@/components/entree-navigation"
+import { ReserveAdmin } from "@/components/reserve-admin"
 import {
 	Sidebar,
 	SidebarContent,
@@ -16,16 +16,11 @@ import {
 } from "@/components/ui/sidebar"
 import { PAGE_ACCUEIL } from "@/lib/constantes"
 
-const ENTREES = [
-	{ titre: "Saisies", lien: "/saisies", icone: ClockIcon },
-	{ titre: "Projets", lien: "/projets", icone: FolderKanbanIcon },
-	{ titre: "Profil", lien: "/profil", icone: UserIcon },
-]
-
-/** Navigation principale de l'application ; l'entrée de la page courante est mise en évidence. */
+/**
+ * Navigation principale de l'application ; l'entrée de la page courante est mise en évidence.
+ * L'entrée « Utilisateurs » n'apparaît qu'à l'administrateur (seule partie qui lit la session).
+ */
 export function BarreLaterale() {
-	const chemin = usePathname()
-
 	return (
 		<Sidebar collapsible="icon">
 			<SidebarHeader>
@@ -46,22 +41,18 @@ export function BarreLaterale() {
 				<SidebarGroup>
 					<SidebarGroupContent>
 						<SidebarMenu>
-							{ENTREES.map((entree) => {
-								const actif = chemin === entree.lien || chemin.startsWith(`${entree.lien}/`)
-								return (
-									<SidebarMenuItem key={entree.lien}>
-										<SidebarMenuButton asChild isActive={actif} tooltip={entree.titre}>
-											<Link
-												href={entree.lien}
-												aria-current={actif ? "page" : undefined}
-											>
-												<entree.icone />
-												<span>{entree.titre}</span>
-											</Link>
-										</SidebarMenuButton>
-									</SidebarMenuItem>
-								)
-							})}
+							<EntreeNavigation titre="Saisies" lien="/saisies" icone={<ClockIcon />} />
+							<EntreeNavigation titre="Projets" lien="/projets" icone={<FolderKanbanIcon />} />
+							<Suspense fallback={null}>
+								<ReserveAdmin>
+									<EntreeNavigation
+										titre="Utilisateurs"
+										lien="/utilisateurs"
+										icone={<UsersIcon />}
+									/>
+								</ReserveAdmin>
+							</Suspense>
+							<EntreeNavigation titre="Profil" lien="/profil" icone={<UserIcon />} />
 						</SidebarMenu>
 					</SidebarGroupContent>
 				</SidebarGroup>

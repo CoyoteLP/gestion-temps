@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { formaterDate, formaterPeriode, initiales } from "./format"
+import { formaterDate, formaterPeriode, formaterUtilisateur, initiales, nomComplet } from "./format"
 
 describe("formaterDate", () => {
 	it("affiche une date ISO au format français", () => {
@@ -28,5 +28,19 @@ describe("initiales", () => {
 		["", ""],
 	])("%s → %s", (nom, attendu) => {
 		expect(initiales(nom)).toBe(attendu)
+	})
+})
+
+describe("nomComplet", () => {
+	it("place le prénom avant le nom", () => {
+		expect(nomComplet({ prenom: "Léa", nom: "Martin" })).toBe("Léa Martin")
+	})
+})
+
+describe("formaterUtilisateur", () => {
+	it("ajoute l'email au nom complet, pour distinguer deux homonymes", () => {
+		expect(formaterUtilisateur({ prenom: "Léa", nom: "Martin", email: "lea@exemple.fr" })).toBe(
+			"Léa Martin — lea@exemple.fr",
+		)
 	})
 })

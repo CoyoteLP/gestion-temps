@@ -2,11 +2,12 @@
 
 import { refresh } from "next/cache"
 
+import type { EtatAction } from "@/lib/actions/etat-action"
+import { etatErreur, etatInvalide, versionValide } from "@/lib/actions/resultats"
 import { ApiError, messageParDefaut } from "@/lib/api/erreurs"
 import { enregistrerMonCompte, modifierMonProfil } from "@/lib/api/utilisateurs"
 import { jetonAccesRenouvele } from "@/lib/auth/session"
 
-import type { EtatAction } from "./etat-action"
 import { schemaProfil, type Profil } from "./schema-profil"
 
 /**
@@ -17,17 +18,12 @@ import { schemaProfil, type Profil } from "./schema-profil"
  * @param version version de la fiche lue avant modification
  * @returns l'état à afficher ; en cas de succès, la page est rafraîchie
  */
-export async function modifierProfil(profil: Profil, version: number): Promise<EtatAction> {
+export async function modifierProfil(profil: Profil, version: number): Promise<EtatAction<keyof Profil>> {
 	const resultat = schemaProfil.safeParse(profil)
 	if (!resultat.success) {
-		const erreurs: Partial<Record<keyof Profil, string>> = {}
-		for (const probleme of resultat.error.issues) {
-			const champ = probleme.path[0] as keyof Profil
-			erreurs[champ] ??= probleme.message
-		}
-		return { statut: "invalide", erreurs }
+		return etatInvalide(resultat.error)
 	}
-	if (!Number.isInteger(version) || version < 0) {
+	if (!versionValide(version)) {
 		return { statut: "erreur", message: "Version de la fiche invalide : rechargez la page." }
 	}
 	try {
@@ -47,7 +43,7 @@ export async function modifierProfil(profil: Profil, version: number): Promise<E
  *
  * @returns l'état à afficher ; en cas de succès, la page est rafraîchie
  */
-export async function finaliserInscription(): Promise<EtatAction> {
+export async function finaliserInscription(): Promise<EtatAction<never>> {
 	const jeton = await jetonAccesRenouvele()
 	if (!jeton) {
 		return { statut: "erreur", message: messageParDefaut(401) }
@@ -61,18 +57,4 @@ export async function finaliserInscription(): Promise<EtatAction> {
 	}
 	refresh()
 	return { statut: "succes" }
-}
-
-function etatErreur(erreur: unknown): EtatAction {
-	if (!(erreur instanceof ApiError)) {
-		throw erreur
-	}
-	if (erreur.statut === 409) {
-		return { statut: "conflit", message: erreur.message }
-	}
-	return {
-		statut: "erreur",
-		message: erreur.message,
-		identifiantCorrelation: erreur.identifiantCorrelation,
-	}
 }

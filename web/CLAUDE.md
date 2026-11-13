@@ -48,9 +48,13 @@ src/
     ui/                 composants shadcn/ui : générés, jamais modifiés à la main
   hooks/                hooks React
   lib/
+    actions/            état renvoyé par les Server Actions (EtatAction) et fonctions communes
     api/                accès à l'API : apiFetch, ApiError, types, une fonction par appel
     auth/               session, jetons, actions de connexion, d'inscription et de déconnexion
     compte/             fiche de l'utilisateur connecté : enregistrement, profil (schéma, actions)
+    projets/, taches/,  une ressource par dossier : schéma de formulaire (schema-*.ts), Server
+    membres/,           Actions (actions.ts), lectures composées côté serveur
+    utilisateurs/
     constantes.ts       valeurs partagées
   auth.ts               configuration d'Auth.js (Keycloak, Authorization Code + PKCE)
   proxy.ts              protection des routes (ex-middleware) et renouvellement du jeton
@@ -69,6 +73,9 @@ src/
   page qui lit l'API se place dans le groupe `(compte-actif)`, dont le layout (`GardeCompte`)
   affiche à la place l'état de l'inscription (« en attente de validation », « à finaliser »).
   La fiche est créée à la connexion (événement `signIn` d'Auth.js, `enregistrerALaConnexion`).
+- Composant client qui lit l'URL (`usePathname`, `useSearchParams`) : sous une route à paramètre
+  dynamique (`/projets/[id]`), il doit être sous `<Suspense>`, sinon le build échoue (voir
+  `EntreeNavigation`, prérendue sans mise en évidence).
 - `src/components/ui/` : ajouter un composant par `npx shadcn@latest add <composant>`, ne jamais
   l'éditer (ni le reformater : exclu de Prettier). Pour l'adapter, l'envelopper dans un composant
   de `src/components/`.
@@ -84,6 +91,10 @@ src/
   versionné, jamais modifié à la main : `npm run api:types` après un changement de l'API).
 - Listes paginées : `PageResponse<T>` ; page lue dans l'URL avec `lirePage()`, taille `TAILLE_PAGE`.
   Le tri est imposé par l'API.
+- Chemin passé à `apiFetch` : `/api/…` fait de segments simples, avec des identifiants vérifiés
+  (nombres : `identifiantValide`, `lireIdentifiant`) ; jamais une chaîne venue du navigateur telle
+  quelle. `construireUrl` refuse tout autre chemin (`//hôte`, `..`, retour à la ligne) avant
+  d'envoyer quoi que ce soit : le jeton ne part jamais vers un autre hôte (alerte CodeQL SSRF).
 - `PUT` : renvoyer la `version` lue ; un 409 propose de recharger la ressource.
 - Option `jeton` d'`apiFetch` : seulement quand le cookie de la requête ne porte pas encore le bon
   jeton (connexion en cours, jeton renouvelé par `jetonAccesRenouvele` dans une Server Action) ;
@@ -91,7 +102,9 @@ src/
 - Lecture partagée dans un même rendu (layout, menu, page) : l'envelopper dans `cache` de React
   (voir `lireMonCompte`).
 - Les messages d'erreur de l'API (déjà en français, destinés à l'utilisateur) sont affichés tels
-  quels, avec l'identifiant de corrélation comme référence (`AlerteErreur`). Les messages par défaut
+  quels, avec l'identifiant de corrélation comme référence (`AlerteErreur`). Dans un composant de
+  lecture : `const resultat = await valeurOuErreurApi(lecture)`, puis `AlerteErreur` si
+  `resultat instanceof ApiError`. Les messages par défaut
   par statut sont dans `src/lib/api/erreurs.ts`.
 
 ## Sécurité
@@ -105,6 +118,11 @@ src/
 - **Les contrôles d'accès sont faits par l'API.** Le front ne fait que masquer les actions non
   autorisées (`estAdmin` de la session) ; une page ou une action ne suppose jamais qu'un bouton
   masqué suffit.
+  - Action d'administration dans une page prérendue : l'envelopper dans `<ReserveAdmin>` (sous
+    `<Suspense fallback={null}>`) ; dans un composant qui lit déjà la session, tester `estAdmin`.
+  - Page réservée à l'administrateur (création, écran Utilisateurs) : `await exigerAdmin()` en tête
+    du composant `async` ; les autres reçoivent la page « introuvable », comme pour une adresse
+    inconnue.
 - Redirection après connexion : chemin relatif de l'application uniquement (`cheminDeRetour`).
 - Aucune entrée utilisateur ni donnée de l'API injectée en HTML brut (`dangerouslySetInnerHTML`
   interdit) ; React échappe le texte.
@@ -126,9 +144,17 @@ src/
 - Formulaires : react-hook-form + zod, avec les mêmes bornes que les DTO de l'API (schéma dans
   `src/lib/…/schema-*.ts`, partagé par le formulaire et la Server Action, qui le revalide). Champs
   avec `Field`, `FieldLabel`, `FieldError` de shadcn. La Server Action renvoie un état (`EtatAction` :
-  succès, invalide avec une erreur par champ, conflit 409, erreur avec référence) et appelle
-  `refresh()` (`next/cache`) après un succès ; le formulaire est remonté sur la nouvelle version
-  (`key={version}`).
+  succès, invalide avec une erreur par champ, conflit 409, erreur avec référence ; commun à tous
+  les formulaires, dans `src/lib/actions/`) et appelle `refresh()` (`next/cache`) après un succès ;
+  le formulaire est remonté sur la nouvelle version (`key={version}`).
+- Une Server Action revalide tout ce qu'elle reçoit (schéma, `identifiantValide`, `versionValide`
+  de `src/lib/actions/resultats.ts`) : elle est appelable directement, sans passer par la page.
+  Erreur de l'API → `etatErreur` (409 → conflit, avec le message de l'API). Un 409 qui désigne un
+  champ (code ou membre en double, en création) est rattaché à ce champ.
+- Opération irréversible (suppression, retrait, désactivation) : `DialogueConfirmation`, qui reçoit
+  la Server Action liée à sa ressource (`action.bind(null, id)`) et affiche le refus de l'API sans
+  se fermer. Un 409 « modifié entre-temps » : `AlerteConflit` (bouton « Recharger »).
+- Formulaire court (deux ou trois champs) : dans un dialogue (`DialogueTache`) ; sinon, une page.
 - Un fichier `"use server"` n'exporte que des fonctions async : types et valeurs initiales vont
   dans un module à part (`etat-action.ts`).
 - Textes de l'interface en français ; `lang="fr"` sur la page.
@@ -149,4 +175,7 @@ src/
 - Composants : requêtes par rôle ou texte visible (`getByRole`), pas par classe CSS.
 - Appels réseau simulés avec `vi.stubGlobal("fetch", …)`, variables avec `vi.stubEnv` (remis à zéro
   automatiquement, voir `vitest.config.mts`).
+- Composant serveur `async` : `render(await Composant(props))` (voir `TachesProjet`) ; `notFound()`
+  se vérifie par l'erreur `NEXT_HTTP_ERROR_FALLBACK;404`. `src/test/setup.ts` fournit les API du
+  navigateur absentes de jsdom (`ResizeObserver`, `matchMedia`).
 - Les tests E2E (Playwright) arriveront avec les écrans métier.

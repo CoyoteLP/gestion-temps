@@ -225,6 +225,11 @@ Dans `.env` : `OIDC_ISSUER_URI=http://localhost:8180/realms/gestion-temps` et
 | `jdupont` | `jdupont@lirox.test` | collaborateur                             |
 | `pmartin` | `pmartin@lirox.test` | collaborateur (à ajouter comme membre d'un projet) |
 
+Ces comptes ont un identifiant fixe dans le royaume (`id`, repris dans la revendication `sub`) : une
+fiche rattachée à l'un d'eux le reste après la recréation du conteneur Keycloak. Un compte créé par
+inscription reçoit un nouvel identifiant à chaque réimport ; sa fiche, déjà rattachée à l'ancien,
+n'est alors plus retrouvée (« Inscription à finaliser ») : vider sa colonne `sujet` en base de dev.
+
 L'administrateur n'a pas besoin d'exister dans l'API ; les collaborateurs doivent y être créés avec
 le même email pour que leur compte soit rattaché :
 
@@ -240,7 +245,8 @@ curl -H "Authorization: Bearer $JDUPONT" http://localhost:8080/api/saisies-temps
 directement : voir [Front-end web](#front-end-web)). Le Keycloak de
 dev n'a pas de serveur d'emails : après l'inscription, cocher *Email verified* sur le compte dans la
 console (*Users*), puis créer la fiche avec le jeton de l'inscrit (`POST /api/utilisateurs/moi`) et
-la valider en administrateur (`PUT /api/utilisateurs/{id}` avec `actif: true`).
+la valider en administrateur (`PUT /api/utilisateurs/{id}` avec `actif: true`, ou écran
+« Utilisateurs » du front).
 
 Les jetons durent 30 minutes. Console d'administration : http://localhost:8180/admin (`admin`,
 mot de passe `KEYCLOAK_ADMIN_PASSWORD`, `admin` par défaut). Sous Git Bash (Windows), éviter les
@@ -284,8 +290,16 @@ ou « Compte en attente de validation ». En dev :
    (l'email n'est pas vérifié, faute de serveur d'emails) ;
 2. dans la console Keycloak (*Users*), cocher *Email verified*, puis « Finaliser mon inscription » :
    « Compte en attente de validation » ;
-3. en administrateur, `PUT /api/utilisateurs/{id}` avec `actif: true` (écran prévu au lot F3), puis
-   recharger la page.
+3. en administrateur (`admin` / `admin`), page « Utilisateurs » : le compte figure sous « En
+   attente », bouton « Activer » ; côté inscrit, recharger la page.
+
+**Projets et tâches** : un collaborateur consulte les projets dont il est membre (liste, fiche et
+tâches) ; l'administrateur les voit tous. L'administrateur crée, modifie et supprime projets et tâches (une ressource encore
+utilisée ne se supprime pas : le message de l'API invite à la désactiver), et gère les membres d'un
+projet (section « Membres » de la fiche, invisible des autres utilisateurs ; rôles Responsable,
+Suppléant et Contributeur, ce dernier proposé par défaut). La page
+« Utilisateurs », réservée à l'administrateur, liste les comptes (en attente par défaut) et les
+active ou les désactive.
 
 La page Profil modifie le nom et le prénom de la fiche ; le mot de passe et l'email se gèrent dans
 la console de compte de Keycloak (lien « Gérer mon compte de connexion »).

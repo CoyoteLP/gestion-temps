@@ -333,7 +333,7 @@ export interface components {
             /** Format: int64 */
             utilisateurId: number;
             /** @enum {string} */
-            role: "MANAGER" | "BACKUP";
+            role: "MANAGER" | "BACKUP" | "CONTRIBUTEUR";
             /** Format: int64 */
             version: number;
         };
@@ -352,7 +352,7 @@ export interface components {
             /** Format: int64 */
             utilisateurId?: number;
             /** @enum {string} */
-            role?: "MANAGER" | "BACKUP";
+            role?: "MANAGER" | "BACKUP" | "CONTRIBUTEUR";
             audit?: components["schemas"]["AuditResponse"];
         };
         ProjetRequest: {

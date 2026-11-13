@@ -2,10 +2,10 @@ import type { JWT } from "next-auth/jwt"
 import { getToken } from "next-auth/jwt"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { unstable_update } from "@/auth"
+import { auth, unstable_update } from "@/auth"
 
 import { rafraichirJeton } from "./jeton"
-import { jetonAccesRenouvele } from "./session"
+import { exigerAdmin, jetonAccesRenouvele } from "./session"
 
 vi.mock("@/auth", () => ({ auth: vi.fn(), unstable_update: vi.fn() }))
 vi.mock("next-auth/jwt", () => ({ getToken: vi.fn() }))
@@ -71,3 +71,21 @@ describe("jetonAccesRenouvele", () => {
 		expect(mettreAJourSimule).not.toHaveBeenCalled()
 	})
 })
+
+describe("exigerAdmin", () => {
+	it("laisse passer l'administrateur", async () => {
+		vi.mocked(auth).mockResolvedValue(sessionAuth(true) as never)
+
+		await expect(exigerAdmin()).resolves.toBeUndefined()
+	})
+
+	it("affiche « introuvable » à un autre utilisateur", async () => {
+		vi.mocked(auth).mockResolvedValue(sessionAuth(false) as never)
+
+		await expect(exigerAdmin()).rejects.toThrow("NEXT_HTTP_ERROR_FALLBACK;404")
+	})
+})
+
+function sessionAuth(estAdmin: boolean) {
+	return { user: { name: "Léa Martin", email: "lea@exemple.fr" }, estAdmin, expires: "" }
+}
