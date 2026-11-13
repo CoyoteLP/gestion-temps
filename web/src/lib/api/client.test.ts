@@ -131,4 +131,31 @@ describe("construireUrl", () => {
 		vi.stubEnv("API_URL", "")
 		expect(() => construireUrl("/api/projets")).toThrow("API_URL")
 	})
+
+	it.each(["/api/projets/12", "/api/projets/12/membres/5", "/api/utilisateurs/moi"])(
+		"garde l'hôte d'API_URL pour un chemin d'API (%s)",
+		(chemin) => {
+			expect(construireUrl(chemin)).toBe(`http://api.test:8080${chemin}`)
+		},
+	)
+
+	it.each([
+		"//autre-hote.test/api/projets",
+		"http://autre-hote.test/api/projets",
+		"/api/../actuator/env",
+		"/api/projets/12/",
+		"/api/projets/1\r\nX: y",
+		"/autre/chemin",
+		"api/projets",
+		"/api",
+	])("refuse un chemin qui n'est pas un chemin d'API simple (%s)", (chemin) => {
+		expect(() => construireUrl(chemin)).toThrow("Chemin d'API invalide")
+	})
+})
+
+describe("apiFetch et un chemin invalide", () => {
+	it("n'envoie aucune requête, donc aucun jeton", async () => {
+		await expect(apiFetch("//autre-hote.test/vol")).rejects.toThrow("Chemin d'API invalide")
+		expect(fetchSimule).not.toHaveBeenCalled()
+	})
 })

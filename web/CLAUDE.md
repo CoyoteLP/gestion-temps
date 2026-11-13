@@ -91,6 +91,10 @@ src/
   versionné, jamais modifié à la main : `npm run api:types` après un changement de l'API).
 - Listes paginées : `PageResponse<T>` ; page lue dans l'URL avec `lirePage()`, taille `TAILLE_PAGE`.
   Le tri est imposé par l'API.
+- Chemin passé à `apiFetch` : `/api/…` fait de segments simples, avec des identifiants vérifiés
+  (nombres : `identifiantValide`, `lireIdentifiant`) ; jamais une chaîne venue du navigateur telle
+  quelle. `construireUrl` refuse tout autre chemin (`//hôte`, `..`, retour à la ligne) avant
+  d'envoyer quoi que ce soit : le jeton ne part jamais vers un autre hôte (alerte CodeQL SSRF).
 - `PUT` : renvoyer la `version` lue ; un 409 propose de recharger la ressource.
 - Option `jeton` d'`apiFetch` : seulement quand le cookie de la requête ne porte pas encore le bon
   jeton (connexion en cours, jeton renouvelé par `jetonAccesRenouvele` dans une Server Action) ;

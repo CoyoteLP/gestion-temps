@@ -34,6 +34,8 @@ export type OptionsRequete = {
  * @throws ApiError si l'API répond une erreur ou est injoignable (le message est affichable)
  */
 export async function apiFetch<T>(chemin: string, options: OptionsRequete = {}): Promise<T> {
+	// Avant tout : un chemin invalide n'envoie aucune requête, ni le jeton
+	const url = construireUrl(chemin, options.parametres)
 	// Un appel à l'API dépend de l'utilisateur : jamais exécuté au prérendu (Cache Components), ce
 	// qui autorise aussi la génération d'un identifiant aléatoire propre à chaque requête
 	await connection()
@@ -49,14 +51,18 @@ export async function apiFetch<T>(chemin: string, options: OptionsRequete = {}):
 
 	let reponse: Response
 	try {
-		reponse = await fetch(construireUrl(chemin, options.parametres), {
+		reponse = await fetch(url, {
 			method: options.methode ?? "GET",
 			headers: entetes,
 			body: options.corps === undefined ? undefined : JSON.stringify(options.corps),
 			cache: "no-store",
 		})
 	} catch {
-		console.error(`API injoignable [${identifiantCorrelation}] ${options.methode ?? "GET"} ${chemin}`)
+		// Chemin déjà validé ; les retours à la ligne sont retirés par principe (injection dans les journaux)
+		const cheminJournal = chemin.replace(/[\r\n]/g, "")
+		console.error(
+			`API injoignable [${identifiantCorrelation}] ${options.methode ?? "GET"} ${cheminJournal}`,
+		)
 		throw new ApiError(
 			STATUT_API_INJOIGNABLE,
 			messageParDefaut(STATUT_API_INJOIGNABLE),
@@ -76,16 +82,33 @@ export async function apiFetch<T>(chemin: string, options: OptionsRequete = {}):
 }
 
 /**
- * @param chemin      chemin de l'API
+ * Chemin d'API accepté : `/api` suivi de segments simples (lettres, chiffres, `-`, `_`, `~`, `%`).
+ * Les chemins contiennent des identifiants venus du navigateur (arguments de Server Action, adresse
+ * de la page) : ni hôte (`//…`), ni schéma, ni `..`, ni retour à la ligne ne doivent pouvoir y entrer.
+ */
+const FORMAT_CHEMIN_API = /^\/api(\/[\w~%-]+)+$/
+
+/**
+ * @param chemin      chemin de l'API, ex. `/api/projets/12`
  * @param parametres  paramètres de requête (valeurs vides omises)
- * @returns l'URL complète, à partir de `API_URL`
+ * @returns l'URL complète, sur l'hôte de `API_URL`
+ * @throws Error si `API_URL` n'est pas défini, ou si le chemin n'est pas un chemin d'API simple
+ *         (l'appel est alors refusé : jamais de requête vers un autre hôte avec le jeton)
  */
 export function construireUrl(chemin: string, parametres: Record<string, ParametreRequete> = {}): string {
 	const base = process.env.API_URL
 	if (!base) {
 		throw new Error("API_URL n'est pas défini")
 	}
-	const url = new URL(chemin, base)
+	if (!FORMAT_CHEMIN_API.test(chemin)) {
+		throw new Error("Chemin d'API invalide")
+	}
+	// Le chemin est ajouté à la base (et non résolu contre elle) : l'hôte reste celui d'API_URL
+	const origine = new URL(base).origin
+	const url = new URL(`${origine}${chemin}`)
+	if (url.origin !== origine) {
+		throw new Error("Chemin d'API invalide")
+	}
 	for (const [nom, valeur] of Object.entries(parametres)) {
 		if (valeur !== undefined && valeur !== null && valeur !== "") {
 			url.searchParams.set(nom, String(valeur))
