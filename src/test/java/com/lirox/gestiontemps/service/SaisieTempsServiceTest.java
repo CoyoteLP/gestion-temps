@@ -29,12 +29,15 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.lirox.gestiontemps.common.Constantes;
+import com.lirox.gestiontemps.domain.MembreProjet;
 import com.lirox.gestiontemps.domain.Projet;
+import com.lirox.gestiontemps.domain.RoleProjet;
 import com.lirox.gestiontemps.domain.SaisieTemps;
 import com.lirox.gestiontemps.domain.Tache;
 import com.lirox.gestiontemps.domain.Utilisateur;
 import com.lirox.gestiontemps.dto.SaisieTempsRequest;
 import com.lirox.gestiontemps.exception.BusinessRuleException;
+import com.lirox.gestiontemps.repository.MembreProjetRepository;
 import com.lirox.gestiontemps.repository.ProjetRepository;
 import com.lirox.gestiontemps.repository.SaisieTempsRepository;
 import com.lirox.gestiontemps.repository.TacheRepository;
@@ -68,6 +71,9 @@ class SaisieTempsServiceTest {
 	private ProjetRepository projetRepository;
 
 	@Autowired
+	private MembreProjetRepository membreProjetRepository;
+
+	@Autowired
 	private TacheRepository tacheRepository;
 
 	@Autowired
@@ -88,6 +94,7 @@ class SaisieTempsServiceTest {
 	void viderLaBase() {
 		SecurityContextHolder.clearContext();
 		saisieTempsRepository.deleteAll();
+		membreProjetRepository.deleteAll();
 		tacheRepository.deleteAll();
 		projetRepository.deleteAll();
 		utilisateurRepository.deleteAll();
@@ -101,6 +108,7 @@ class SaisieTempsServiceTest {
 	void createConcurrentsNeDepassentPasLeTotalJournalier() throws Exception {
 		Utilisateur utilisateur = saveUtilisateur();
 		Tache tache = saveTache();
+		rendreMembre(utilisateur, tache);
 		SaisieTempsRequest request = request(utilisateur, tache, null);
 		List<Callable<Void>> appels = new ArrayList<>();
 		for (int i = 0; i < NOMBRE_REQUETES; i++) {
@@ -231,6 +239,15 @@ class SaisieTempsServiceTest {
 
 	private BigDecimal totalJournee(Utilisateur utilisateur) {
 		return saisieTempsRepository.totalJournee(utilisateur.getId(), JOUR, null);
+	}
+
+	/** Seul un membre du projet peut y saisir du temps. */
+	private void rendreMembre(Utilisateur utilisateur, Tache tache) {
+		MembreProjet membre = new MembreProjet();
+		membre.setProjet(tache.getProjet());
+		membre.setUtilisateur(utilisateur);
+		membre.setRole(RoleProjet.CONTRIBUTEUR);
+		membreProjetRepository.save(membre);
 	}
 
 	private Utilisateur saveUtilisateur() {

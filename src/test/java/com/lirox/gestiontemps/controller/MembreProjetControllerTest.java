@@ -1,5 +1,6 @@
 package com.lirox.gestiontemps.controller;
 
+import static com.lirox.gestiontemps.JetonsDeTest.collaborateur;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -244,6 +245,47 @@ class MembreProjetControllerTest {
 		membre.setUtilisateur(u);
 		membre.setRole(role);
 		return membreProjetRepository.save(membre);
+	}
+
+	// Visibilité et rôle Contributeur
+
+	@Test
+	void unMembreVoitLesMembresDeSonProjetEtPasCeuxDesAutres() throws Exception {
+		MembreProjet responsable = save(projet, utilisateur, RoleProjet.MANAGER);
+		Utilisateur contributeur = saveCollaborateur("cdurand@lirox.com");
+		save(projet, contributeur, RoleProjet.CONTRIBUTEUR);
+		Projet autreProjet = saveProjet("PRJ-02");
+		MembreProjet membreAilleurs = save(autreProjet, saveUtilisateur("pmartin@lirox.com"), RoleProjet.MANAGER);
+
+		mockMvc.perform(get("/api/projets/{projetId}/membres", projet.getId()).with(collaborateur(contributeur)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.total").value(2));
+		mockMvc.perform(get("/api/projets/{projetId}/membres/{id}", projet.getId(), responsable.getId())
+				.with(collaborateur(contributeur)))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/projets/{projetId}/membres", autreProjet.getId()).with(collaborateur(contributeur)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message").value("Vous n'êtes pas membre de ce projet"));
+		mockMvc.perform(get("/api/projets/{projetId}/membres/{id}", autreProjet.getId(), membreAilleurs.getId())
+				.with(collaborateur(contributeur)))
+				.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void createAccepteLeRoleContributeur() throws Exception {
+		mockMvc.perform(post("/api/projets/{projetId}/membres", projet.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"utilisateurId": %d, "role": "CONTRIBUTEUR"}
+						""".formatted(utilisateur.getId())))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.role").value("CONTRIBUTEUR"));
+	}
+
+	/** Utilisateur dont le compte OIDC est rattaché (sujet renseigné). */
+	private Utilisateur saveCollaborateur(String email) {
+		Utilisateur u = saveUtilisateur(email);
+		u.setSujet("sujet-" + email);
+		return u;
 	}
 
 }

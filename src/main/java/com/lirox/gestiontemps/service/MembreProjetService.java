@@ -10,6 +10,7 @@ import com.lirox.gestiontemps.dto.MembreProjetRequest;
 import com.lirox.gestiontemps.dto.MembreProjetResponse;
 import com.lirox.gestiontemps.dto.PageResponse;
 import com.lirox.gestiontemps.dto.PaginationRequest;
+import com.lirox.gestiontemps.exception.AccesRefuseException;
 import com.lirox.gestiontemps.exception.DuplicateResourceException;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.exception.ResourceNotFoundException;
@@ -19,7 +20,9 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * Gestion des membres d'un projet : un utilisateur est membre d'un projet au plus une fois, avec un
- * rôle qui lui donne accès aux saisies du projet.
+ * rôle ({@link com.lirox.gestiontemps.domain.RoleProjet}) ; les droits qui en découlent sont dans
+ * {@link AccesProjetService}. Les membres d'un projet sont visibles par ses seuls membres et par
+ * l'administrateur.
  */
 @Service
 @RequiredArgsConstructor
@@ -29,15 +32,18 @@ public class MembreProjetService {
 	private final MembreProjetRepository membreProjetRepository;
 	private final ProjetService projetService;
 	private final UtilisateurService utilisateurService;
+	private final AccesProjetService accesProjetService;
 
 	/**
 	 * @param projetId   identifiant du projet
 	 * @param pagination page demandée
 	 * @return une page de membres du projet, par identifiant croissant
 	 * @throws ResourceNotFoundException si le projet n'existe pas
+	 * @throws AccesRefuseException      si l'appelant n'est ni administrateur ni membre du projet
 	 */
 	public PageResponse<MembreProjetResponse> findAll(Long projetId, PaginationRequest pagination) {
 		projetService.getProjet(projetId);
+		accesProjetService.verifierAcces(projetId);
 		return PageResponse.from(membreProjetRepository.findByProjetId(projetId, pagination.versPageRequest(Sort.by("id"))),
 				MembreProjetResponse::from);
 	}
@@ -47,9 +53,12 @@ public class MembreProjetService {
 	 * @param id       identifiant du membre
 	 * @return le membre
 	 * @throws ResourceNotFoundException si le membre n'existe pas dans ce projet
+	 * @throws AccesRefuseException      si l'appelant n'est ni administrateur ni membre du projet
 	 */
 	public MembreProjetResponse findById(Long projetId, Long id) {
-		return MembreProjetResponse.from(getMembre(projetId, id));
+		MembreProjet membre = getMembre(projetId, id);
+		accesProjetService.verifierAcces(projetId);
+		return MembreProjetResponse.from(membre);
 	}
 
 	/**
@@ -100,17 +109,6 @@ public class MembreProjetService {
 	@Transactional
 	public void delete(Long projetId, Long id) {
 		membreProjetRepository.delete(getMembre(projetId, id));
-	}
-
-	/**
-	 * Réservé aux autres services du paquet : droit d'accès aux saisies d'un projet.
-	 *
-	 * @param projetId      identifiant du projet
-	 * @param utilisateurId identifiant de l'utilisateur
-	 * @return true si l'utilisateur est membre du projet, quel que soit son rôle
-	 */
-	boolean estMembre(Long projetId, Long utilisateurId) {
-		return membreProjetRepository.existsByProjetIdAndUtilisateurId(projetId, utilisateurId);
 	}
 
 	private MembreProjet getMembre(Long projetId, Long id) {

@@ -248,8 +248,11 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - Règles grossières par URL et rôle dans `SecurityConfig` (lecture pour tout titulaire d'une fiche
   active ou administrateur, sa propre fiche `/api/utilisateurs/moi` pour tout authentifié, liste des
   utilisateurs et écritures de référentiel réservées à l'administrateur) ; règles fines (« ses propres saisies », membres d'un
-  projet) dans les **services**, via `UtilisateurCourantService` (`estAdmin()`, `get()`), en levant
-  `AccesRefuseException`. Jamais de contrôle d'accès dans un contrôleur.
+  projet) dans les **services**, via `UtilisateurCourantService` (`estAdmin()`, `get()`) et
+  `AccesProjetService` (`verifierAcces`, `utilisateurRestreint`, `estMembre`, `estResponsable`), en
+  levant `AccesRefuseException`. Jamais de contrôle d'accès dans un contrôleur.
+- Un collaborateur ne lit que les projets dont il est **membre** (et leurs tâches, membres,
+  clôtures) : listes restreintes, 403 sur un projet existant dont il n'est pas membre.
 - 401 et 403 de Spring Security passent par `GlobalExceptionHandler` (enveloppe `ApiResponse`).
 - Un utilisateur est identifié par la revendication `sub` (colonne `utilisateur.sujet`), rattachée
   une fois par l'email du jeton, seulement s'il est déclaré vérifié (`email_verified`, voir
@@ -320,11 +323,16 @@ Messages d'erreur en français, compréhensibles par un utilisateur final.
 - Le total des saisies d'un utilisateur sur une journée ne dépasse pas `Constantes.MAX_HEURES_JOUR` (24 h).
 - Pas de nouvelle saisie pour un utilisateur, une tâche ou un projet désactivé ; une saisie
   existante reste corrigeable tant qu'on ne change ni l'utilisateur ni la tâche.
+- Rôles d'un membre de projet (`RoleProjet`) : `MANAGER` (responsable) et `BACKUP` (suppléant)
+  voient les saisies de tous les membres et clôturent ; `CONTRIBUTEUR` voit le projet et y saisit.
+  L'utilisateur d'une saisie nouvelle ou réaffectée (autre utilisateur ou autre tâche) doit être
+  membre du projet, quel que soit son rôle, administrateur compris (422) ; une saisie existante
+  reste corrigeable après le retrait de son auteur.
 - Le jour d'une saisie nouvelle ou déplacée (autre jour ou autre tâche) est compris dans la période
   du projet (`dateDebut`, `dateFin`, bornes incluses, nulles = ouvertes).
 - Un mois clôturé pour un projet (`Cloture`) interdit de créer, modifier, déplacer (vers ou depuis
   ce mois) ou supprimer ses saisies, administrateur compris. Seul un mois terminé se clôture, par un
-  administrateur ou un membre du projet ; seul un administrateur le rouvre. Chaque écriture de saisie
+  administrateur, un responsable ou un suppléant du projet ; seul un administrateur le rouvre. Chaque écriture de saisie
   verrouille le projet en lecture et une clôture le verrouille en écriture (`ProjetRepository`) :
   une saisie ne peut pas s'intercaler pendant une clôture.
 

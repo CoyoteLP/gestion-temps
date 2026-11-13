@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -117,6 +118,8 @@ class SaisieTempsControllerTest {
 		tacheRepository.save(tache);
 
 		utilisateur = saveUtilisateur("jdupont@lirox.com");
+		// Seul un membre du projet peut y saisir du temps
+		saveMembre(projet, utilisateur, RoleProjet.CONTRIBUTEUR);
 	}
 
 	@Test
@@ -696,6 +699,7 @@ class SaisieTempsControllerTest {
 	@Test
 	void laModificationEnregistreSonAuteurSansToucherALaCreation() throws Exception {
 		Utilisateur collaborateur = saveCollaborateur("cdurand@lirox.com");
+		saveMembre(tache.getProjet(), collaborateur, RoleProjet.CONTRIBUTEUR);
 		String id = JsonPath.read(mockMvc.perform(post("/api/saisies-temps").contentType(MediaType.APPLICATION_JSON)
 				.content("""
 						{"utilisateurId": %d, "tacheId": %d, "duree": 2}
@@ -721,6 +725,7 @@ class SaisieTempsControllerTest {
 	@Test
 	void unCollaborateurSaisitPourLuiSansPreciserLUtilisateur() throws Exception {
 		Utilisateur collaborateur = saveCollaborateur("cdurand@lirox.com");
+		saveMembre(tache.getProjet(), collaborateur, RoleProjet.CONTRIBUTEUR);
 		mockMvc.perform(post("/api/saisies-temps").with(collaborateur(collaborateur))
 				.contentType(MediaType.APPLICATION_JSON).content("""
 						{"tacheId": %d, "jour": "2026-10-30", "duree": 2}
@@ -794,12 +799,101 @@ class SaisieTempsControllerTest {
 				.with(collaborateur(collaborateur)))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.message")
-						.value("Vous ne pouvez consulter que vos saisies ou celles des projets dont vous êtes membre"));
+						.value("Vous ne pouvez consulter que vos saisies ou celles des projets dont vous êtes"
+								+ " responsable ou suppléant"));
 		mockMvc.perform(get("/api/saisies-temps/{id}", saisieDUnAutre.getId()).with(collaborateur(collaborateur)))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.message").value("Vous n'avez pas accès à cette saisie"));
 		mockMvc.perform(get("/api/saisies-temps/{id}", saSaisie.getId()).with(collaborateur(collaborateur)))
 				.andExpect(status().isOk());
+	}
+
+	// Saisie réservée aux membres du projet (tout rôle)
+
+	@ParameterizedTest
+	@EnumSource(RoleProjet.class)
+	void unMembreDuProjetPeutYSaisirQuelQueSoitSonRole(RoleProjet role) throws Exception {
+		Utilisateur collaborateur = saveCollaborateur("cdurand@lirox.com");
+		saveMembre(tache.getProjet(), collaborateur, role);
+		mockMvc.perform(post("/api/saisies-temps").with(collaborateur(collaborateur))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"tacheId": %d, "jour": "2026-10-30", "duree": 2}
+						""".formatted(tache.getId())))
+				.andExpect(status().isCreated());
+	}
+
+	@Test
+	void createRefuseUneSaisieSurUnProjetDontLUtilisateurNEstPasMembre() throws Exception {
+		Utilisateur collaborateur = saveCollaborateur("cdurand@lirox.com");
+		mockMvc.perform(post("/api/saisies-temps").with(collaborateur(collaborateur))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"tacheId": %d, "jour": "2026-10-30", "duree": 2}
+						""".formatted(tache.getId())))
+				.andExpect(status().isUnprocessableContent())
+				.andExpect(jsonPath("$.message").value("Impossible de saisir du temps sur le projet PRJ-01 :"
+						+ " l'utilisateur n'en est pas membre (un administrateur doit l'y ajouter)"));
+		assertThat(saisieTempsRepository.count()).isZero();
+	}
+
+	@Test
+	void lAdministrateurNePeutPasSaisirPourUnNonMembre() throws Exception {
+		Utilisateur nonMembre = saveUtilisateur("cdurand@lirox.com");
+		mockMvc.perform(post("/api/saisies-temps").contentType(MediaType.APPLICATION_JSON).content("""
+				{"utilisateurId": %d, "tacheId": %d, "jour": "2026-10-30", "duree": 2}
+				""".formatted(nonMembre.getId(), tache.getId())))
+				.andExpect(status().isUnprocessableContent());
+		assertThat(saisieTempsRepository.count()).isZero();
+	}
+
+	@Test
+	void updateRefuseDeDeplacerUneSaisieVersUnProjetDontLUtilisateurNEstPasMembre() throws Exception {
+		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 5, 20));
+		Projet autreProjet = new Projet();
+		autreProjet.setCode("PRJ-02");
+		autreProjet.setNom("Projet PRJ-02");
+		projetRepository.save(autreProjet);
+		Tache tacheHorsProjet = new Tache();
+		tacheHorsProjet.setProjet(autreProjet);
+		tacheHorsProjet.setLibelle("Dev");
+		tacheRepository.save(tacheHorsProjet);
+
+		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "duree": 2}
+						""".formatted(utilisateur.getId(), tacheHorsProjet.getId())))
+				.andExpect(status().isUnprocessableContent());
+	}
+
+	@Test
+	void uneSaisieResteCorrigeableApresLeRetraitDeSonAuteurDuProjet() throws Exception {
+		SaisieTemps saisie = save(utilisateur, LocalDate.of(2026, 5, 20));
+		membreProjetRepository.deleteByUtilisateurId(utilisateur.getId());
+
+		mockMvc.perform(put("/api/saisies-temps/{id}", saisie.getId()).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"version": 0, "utilisateurId": %d, "tacheId": %d, "duree": 3, "commentaire": "Corrigé"}
+						""".formatted(utilisateur.getId(), tache.getId())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.duree").value(3));
+	}
+
+	@Test
+	void unContributeurNeVoitQueSesSaisiesDuProjet() throws Exception {
+		Utilisateur contributeur = saveCollaborateur("cdurand@lirox.com");
+		saveMembre(tache.getProjet(), contributeur, RoleProjet.CONTRIBUTEUR);
+		SaisieTemps saisieDUnAutre = save(utilisateur, LocalDate.of(2026, 10, 30));
+		SaisieTemps saSaisie = save(contributeur, LocalDate.of(2026, 10, 30));
+
+		mockMvc.perform(get("/api/saisies-temps").param("projetId", tache.getProjet().getId().toString())
+				.param("du", "2026-10-01").param("au", "2026-10-31").with(collaborateur(contributeur)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.contenu.length()").value(1))
+				.andExpect(jsonPath("$.data.contenu[0].id").value(saSaisie.getId()));
+		mockMvc.perform(get("/api/saisies-temps").param("projetId", tache.getProjet().getId().toString())
+				.param("utilisateurId", utilisateur.getId().toString()).with(collaborateur(contributeur)))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(get("/api/saisies-temps/{id}", saisieDUnAutre.getId()).with(collaborateur(contributeur)))
+				.andExpect(status().isForbidden());
 	}
 
 	@Test
@@ -886,7 +980,9 @@ class SaisieTempsControllerTest {
 		Tache t = new Tache();
 		t.setProjet(p);
 		t.setLibelle("Dev");
-		return tacheRepository.save(t);
+		tacheRepository.save(t);
+		saveMembre(p, utilisateur, RoleProjet.CONTRIBUTEUR);
+		return t;
 	}
 
 	private MembreProjet saveMembre(Projet p, Utilisateur u, RoleProjet role) {

@@ -12,6 +12,7 @@ import com.lirox.gestiontemps.dto.PageResponse;
 import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.TacheRequest;
 import com.lirox.gestiontemps.dto.TacheResponse;
+import com.lirox.gestiontemps.exception.AccesRefuseException;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.exception.ResourceInUseException;
 import com.lirox.gestiontemps.exception.ResourceNotFoundException;
@@ -23,7 +24,8 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * Gestion des tâches : rattachement à un projet existant et interdiction de supprimer une tâche qui
- * a des saisies de temps.
+ * a des saisies de temps. Un collaborateur ne lit que les tâches des projets dont il est membre
+ * ({@link AccesProjetService}).
  */
 @Service
 @RequiredArgsConstructor
@@ -33,16 +35,27 @@ public class TacheService {
 	private final TacheRepository tacheRepository;
 	private final ProjetRepository projetRepository;
 	private final SaisieTempsRepository saisieTempsRepository;
+	private final AccesProjetService accesProjetService;
 
 	/**
-	 * @param projetId   restreint aux tâches de ce projet ; null = toutes les tâches
+	 * @param projetId   restreint aux tâches de ce projet ; null = toutes les tâches visibles (celles
+	 *                   des projets dont un collaborateur est membre)
 	 * @param pagination page demandée
 	 * @return une page de tâches, par identifiant croissant
+	 * @throws AccesRefuseException si un collaborateur filtre sur un projet dont il n'est pas membre
 	 */
 	public PageResponse<TacheResponse> findAll(Long projetId, PaginationRequest pagination) {
 		PageRequest page = pagination.versPageRequest(Sort.by("id"));
-		Page<Tache> taches = projetId == null ? tacheRepository.findAll(page)
-				: tacheRepository.findByProjetId(projetId, page);
+		Page<Tache> taches;
+		if (projetId != null) {
+			accesProjetService.verifierAcces(projetId);
+			taches = tacheRepository.findByProjetId(projetId, page);
+		}
+		else {
+			Long utilisateurId = accesProjetService.utilisateurRestreint();
+			taches = utilisateurId == null ? tacheRepository.findAll(page)
+					: tacheRepository.findDontMembre(utilisateurId, page);
+		}
 		return PageResponse.from(taches, TacheResponse::from);
 	}
 
@@ -50,9 +63,12 @@ public class TacheService {
 	 * @param id identifiant de la tâche
 	 * @return la tâche
 	 * @throws ResourceNotFoundException si la tâche n'existe pas
+	 * @throws AccesRefuseException      si l'appelant n'est ni administrateur ni membre du projet de la tâche
 	 */
 	public TacheResponse findById(Long id) {
-		return TacheResponse.from(getTache(id));
+		Tache tache = getTache(id);
+		accesProjetService.verifierAcces(tache.getProjet().getId());
+		return TacheResponse.from(tache);
 	}
 
 	/**

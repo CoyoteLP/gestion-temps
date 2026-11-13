@@ -226,6 +226,13 @@ En mise à jour progressive (plusieurs instances), les anciennes instances tourn
 nouveau schéma : le CHANGELOG signale les versions dont les migrations l'interdisent, à déployer
 alors avec un arrêt complet.
 
+Versions à déployer **avec un arrêt complet** :
+
+- **1.1.0** (migration `V6`) : les projets et la saisie sont réservés aux membres du projet, avec
+  le nouveau rôle `CONTRIBUTEUR`. La migration ajoute comme contributeur chaque utilisateur sur les
+  projets où il a déjà des saisies ; une instance 1.0.0 ne sait pas lire ce rôle. Après la mise à
+  jour, l'administrateur déclare les autres membres (collaborateurs sans saisie).
+
 ## 11. Arrêt
 
 Sur `SIGTERM`, l'API cesse d'accepter des requêtes, laisse 20 s à celles en cours, puis s'arrête.

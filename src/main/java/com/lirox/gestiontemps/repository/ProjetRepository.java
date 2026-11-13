@@ -3,6 +3,8 @@ package com.lirox.gestiontemps.repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -25,6 +27,19 @@ public interface ProjetRepository extends JpaRepository<Projet, Long> {
 	 * @return true si un projet porte déjà ce code
 	 */
 	boolean existsByCode(String code);
+
+	/**
+	 * Projets visibles par un collaborateur : ceux dont il est membre, quel que soit son rôle.
+	 *
+	 * @param utilisateurId identifiant de l'utilisateur
+	 * @param page          page et tri demandés
+	 * @return la page des projets dont l'utilisateur est membre
+	 */
+	@Query("""
+			select p from Projet p
+			where exists (select m from MembreProjet m where m.projet = p and m.utilisateur.id = :utilisateurId)
+			""")
+	Page<Projet> findDontMembre(@Param("utilisateurId") Long utilisateurId, Pageable page);
 
 	/**
 	 * Contrôle d'unicité du code lors d'une modification.
