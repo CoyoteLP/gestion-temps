@@ -41,7 +41,8 @@ export async function MembresProjet({ projetId }: Readonly<{ projetId: number }>
 					<h2>Membres</h2>
 				</CardTitle>
 				<CardDescription>
-					Ils consultent les saisies du projet et peuvent clôturer ses mois.
+					Seuls les membres voient le projet et y saisissent leur temps ; responsables et suppléants
+					consultent aussi les saisies de tous et clôturent les mois.
 				</CardDescription>
 				<CardAction>
 					<DialogueMembre

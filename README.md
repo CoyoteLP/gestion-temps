@@ -225,6 +225,11 @@ Dans `.env` : `OIDC_ISSUER_URI=http://localhost:8180/realms/gestion-temps` et
 | `jdupont` | `jdupont@lirox.test` | collaborateur                             |
 | `pmartin` | `pmartin@lirox.test` | collaborateur (à ajouter comme membre d'un projet) |
 
+Ces comptes ont un identifiant fixe dans le royaume (`id`, repris dans la revendication `sub`) : une
+fiche rattachée à l'un d'eux le reste après la recréation du conteneur Keycloak. Un compte créé par
+inscription reçoit un nouvel identifiant à chaque réimport ; sa fiche, déjà rattachée à l'ancien,
+n'est alors plus retrouvée (« Inscription à finaliser ») : vider sa colonne `sujet` en base de dev.
+
 L'administrateur n'a pas besoin d'exister dans l'API ; les collaborateurs doivent y être créés avec
 le même email pour que leur compte soit rattaché :
 
@@ -288,10 +293,11 @@ ou « Compte en attente de validation ». En dev :
 3. en administrateur (`admin` / `admin`), page « Utilisateurs » : le compte figure sous « En
    attente », bouton « Activer » ; côté inscrit, recharger la page.
 
-**Projets et tâches** : tout compte actif consulte la liste des projets, la fiche d'un projet et
-ses tâches. L'administrateur crée, modifie et supprime projets et tâches (une ressource encore
+**Projets et tâches** : un collaborateur consulte les projets dont il est membre (liste, fiche et
+tâches) ; l'administrateur les voit tous. L'administrateur crée, modifie et supprime projets et tâches (une ressource encore
 utilisée ne se supprime pas : le message de l'API invite à la désactiver), et gère les membres d'un
-projet (section « Membres » de la fiche, invisible des autres utilisateurs). La page
+projet (section « Membres » de la fiche, invisible des autres utilisateurs ; rôles Responsable,
+Suppléant et Contributeur, ce dernier proposé par défaut). La page
 « Utilisateurs », réservée à l'administrateur, liste les comptes (en attente par défaut) et les
 active ou les désactive.
 

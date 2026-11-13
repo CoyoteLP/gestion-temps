@@ -164,6 +164,17 @@ Aucun code Java ne change dans ce lot.
     de date au départ ; filtre appliqué après une courte pause de frappe ; tri et filtres conservés
     dans l'URL (avec la page, remise à 1 à chaque changement) ;
   - un composant de tableau commun à toutes les listes de l'application.
+- **F3c (backend) : réinitialiser le rattachement d'un compte** (demandé le 2026-11-14). Une fiche
+  rattachée à un compte du fournisseur (`utilisateur.sujet`) n'est jamais reprise par un autre
+  compte, même de même email vérifié (protection contre l'usurpation). Si le compte est supprimé
+  puis recréé chez le fournisseur, l'utilisateur reste bloqué sur « Inscription à finaliser » et
+  seul un accès à la base le débloque. Action administrateur à prévoir (endpoint dédié, ex.
+  `DELETE /api/utilisateurs/{id}/rattachement`, et bouton dans l'écran Utilisateurs) qui vide le
+  rattachement : la fiche est reprise à la connexion suivante par l'email vérifié.
+  Dans le même lot (décidé le 2026-11-14) : **rôle de l'utilisateur connecté** dans ses projets.
+  `ProjetResponse` gagne `monRole` (rôle de l'appelant, `null` s'il n'est pas membre), calculé en
+  une requête par page ; le front l'affiche en colonne « Mon rôle » de la liste des projets et en
+  badge sur la fiche (rien pour un administrateur non membre). Plan à valider.
 - **F4** : saisies de temps (choix du projet puis de la tâche, saisie par jour ou par semaine,
   total journalier, mois clôturés en lecture seule).
 - **F5** : déploiement du front (sortie `standalone`, image, `docs/DEPLOIEMENT.md`) et tests E2E Playwright.

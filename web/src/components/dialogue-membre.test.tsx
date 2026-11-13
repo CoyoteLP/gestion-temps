@@ -42,6 +42,20 @@ describe("DialogueMembre en ajout", () => {
 		expect(ajouterSimule).not.toHaveBeenCalled()
 	})
 
+	it("propose le rôle Contributeur par défaut", async () => {
+		render(
+			<DialogueMembre
+				mode="ajout"
+				projetId={3}
+				candidats={[{ id: 7, libelle: "Léa Martin — lea@exemple.fr" }]}
+				declencheur={<Button>Ouvrir</Button>}
+			/>,
+		)
+		await ouvrir()
+
+		expect(screen.getByRole("combobox", { name: "Rôle" })).toHaveTextContent("Contributeur")
+	})
+
 	it("signale qu'aucun utilisateur actif ne reste à ajouter", async () => {
 		render(
 			<DialogueMembre mode="ajout" projetId={3} candidats={[]} declencheur={<Button>Ouvrir</Button>} />,

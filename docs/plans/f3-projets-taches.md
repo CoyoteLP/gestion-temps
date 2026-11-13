@@ -2,7 +2,7 @@
 
 > **État (2026-11-14)** : implémenté sur `feature/projets-taches` ; lint, format, types, 346 tests
 > Vitest et build verts ; `web:review` faite et corrigée (tests ajoutés, titre de l'onglet = nom du
-> projet, liste des utilisateurs extraite en composant testable). Reste : parcours de bout en bout, PR.
+> projet, liste des utilisateurs extraite en composant testable). Parcours de bout en bout validé le 2026-11-14 (avec le lot F3a) ; pull request ouverte.
 >
 > Écarts avec le plan :
 > - **409 en modification d'un projet** : l'API ne distingue pas un conflit de version d'un code en
@@ -20,6 +20,10 @@
 > - Royaume de dev : les comptes importés (`admin`, `jdupont`, `pmartin`) reçoivent
 >   `default-roles-gestion-temps`, que Keycloak n'attribue pas aux comptes importés : sans lui, le
 >   lien « Gérer mon compte de connexion » de la page Profil menait à une « erreur inattendue ».
+> - Adapté au lot backend F3a (PR #28, fusionnée avant ce lot) : un collaborateur ne voit que les
+>   projets dont il est membre (fiche d'un autre projet : message de l'API « Vous n'êtes pas membre
+>   de ce projet ») ; rôle **Contributeur** dans le choix des membres, proposé par défaut ; types
+>   régénérés (`npm run api:types`).
 > - Correction au passage : les liens de pagination portaient un `aria-label` anglais (shadcn).
 
 Deuxième lot d'écrans métier du front-end (`web/`), suite des plans

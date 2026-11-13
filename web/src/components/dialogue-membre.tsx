@@ -24,7 +24,12 @@ import { ETAT_INITIAL, type EtatAction } from "@/lib/actions/etat-action"
 import type { RoleProjet } from "@/lib/api/modeles"
 import { DUREE_MESSAGE_SUCCES_MS } from "@/lib/constantes"
 import { ajouterMembreAction, modifierMembreAction } from "@/lib/membres/actions"
-import { LIBELLES_ROLE_PROJET, schemaMembre, type ValeursMembre } from "@/lib/membres/schema-membre"
+import {
+	LIBELLES_ROLE_PROJET,
+	ROLE_PROJET_PAR_DEFAUT,
+	schemaMembre,
+	type ValeursMembre,
+} from "@/lib/membres/schema-membre"
 
 /** Utilisateur proposé ou affiché : identifiant et libellé (« Martin Léa — lea@exemple.fr »). */
 export type ChoixUtilisateur = Readonly<{ id: number; libelle: string }>
@@ -57,7 +62,7 @@ export function DialogueMembre(props: Props) {
 		props.mode === "modification"
 			? { utilisateurId: props.membre.utilisateur.id, role: props.membre.role }
 			: // Pas de choix par défaut : le schéma refuse 0 (« Choisissez un utilisateur »)
-				{ utilisateurId: 0, role: "BACKUP" }
+				{ utilisateurId: 0, role: ROLE_PROJET_PAR_DEFAUT }
 	const [ouvert, setOuvert] = useState(false)
 	const [enCours, demarrer] = useTransition()
 	const [etat, setEtat] = useState<EtatAction<keyof ValeursMembre>>(ETAT_INITIAL)
@@ -113,7 +118,8 @@ export function DialogueMembre(props: Props) {
 							{props.mode === "modification" ? "Modifier le rôle" : "Ajouter un membre"}
 						</DialogTitle>
 						<DialogDescription>
-							Les membres consultent les saisies du projet et peuvent clôturer ses mois.
+							Seuls les membres voient le projet et y saisissent leur temps ; responsables et
+							suppléants consultent aussi les saisies de tous et clôturent les mois.
 						</DialogDescription>
 					</DialogHeader>
 					{etat.statut === "conflit" && (

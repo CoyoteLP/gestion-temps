@@ -59,6 +59,18 @@ describe("MembresProjet", () => {
 		expect(screen.getByRole("button", { name: "Retirer Léa Martin du projet" })).toBeInTheDocument()
 	})
 
+	it("affiche le libellé de chaque rôle, dont Contributeur", async () => {
+		lireSimule.mockResolvedValue({
+			membres: [membre(lea), { ...membre(null, 30), id: 6, role: "CONTRIBUTEUR" }],
+			candidats: [],
+		})
+
+		await afficher()
+
+		expect(screen.getByText("Responsable")).toBeInTheDocument()
+		expect(screen.getByText("Contributeur")).toBeInTheDocument()
+	})
+
 	it("signale un membre dont la fiche est désactivée", async () => {
 		lireSimule.mockResolvedValue({ membres: [membre({ ...lea, actif: false })], candidats: [] })
 
