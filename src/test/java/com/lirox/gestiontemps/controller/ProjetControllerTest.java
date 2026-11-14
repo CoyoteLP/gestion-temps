@@ -3,6 +3,7 @@ package com.lirox.gestiontemps.controller;
 import static com.lirox.gestiontemps.JetonsDeTest.collaborateur;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -383,6 +384,59 @@ class ProjetControllerTest {
 				.andExpect(status().isNotFound());
 	}
 
+	// Rôle de l'appelant dans chaque projet (monRole)
+
+	@Test
+	void unCollaborateurVoitSonRoleDansChacunDeSesProjets() throws Exception {
+		Projet contribue = save("PRJ-01");
+		Projet dirige = save("PRJ-02");
+		Utilisateur collaborateur = saveMembre(contribue, "cdurand@lirox.com", RoleProjet.CONTRIBUTEUR);
+		ajouterMembre(dirige, collaborateur, RoleProjet.MANAGER);
+
+		mockMvc.perform(get("/api/projets").with(collaborateur(collaborateur)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.contenu[0].monRole").value("CONTRIBUTEUR"))
+				.andExpect(jsonPath("$.data.contenu[1].monRole").value("MANAGER"));
+		mockMvc.perform(get("/api/projets/{id}", dirige.getId()).with(collaborateur(collaborateur)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.monRole").value("MANAGER"));
+	}
+
+	@Test
+	void lAdministrateurNonMembreNAPasDeRole() throws Exception {
+		Projet projet = save("PRJ-01");
+		saveMembre(projet, "cdurand@lirox.com", RoleProjet.MANAGER);
+
+		mockMvc.perform(get("/api/projets"))
+				.andExpect(jsonPath("$.data.contenu[0].monRole").value(nullValue()));
+		mockMvc.perform(get("/api/projets/{id}", projet.getId()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.monRole").value(nullValue()));
+	}
+
+	@Test
+	void lAdministrateurMembreVoitSonRole() throws Exception {
+		Projet projet = save("PRJ-01");
+		save("PRJ-02");
+		Utilisateur ficheAdministrateur = new Utilisateur();
+		ficheAdministrateur.setEmail("admin@lirox.com");
+		ficheAdministrateur.setNom("Admin");
+		ficheAdministrateur.setPrenom("Alice");
+		ficheAdministrateur.setSujet(JetonsDeTest.SUJET_ADMIN);
+		utilisateurRepository.save(ficheAdministrateur);
+		ajouterMembre(projet, ficheAdministrateur, RoleProjet.BACKUP);
+
+		mockMvc.perform(get("/api/projets"))
+				.andExpect(jsonPath("$.data.total").value(2))
+				.andExpect(jsonPath("$.data.contenu[0].monRole").value("BACKUP"))
+				.andExpect(jsonPath("$.data.contenu[1].monRole").value(nullValue()));
+		mockMvc.perform(put("/api/projets/{id}", projet.getId()).contentType(MediaType.APPLICATION_JSON).content("""
+				{"code": "PRJ-01", "nom": "Projet renommé", "version": 0}
+				"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.monRole").value("BACKUP"));
+	}
+
 	@Test
 	void unCollaborateurMembreDAucunProjetNEnVoitAucun() throws Exception {
 		Projet projet = save("PRJ-01");
@@ -413,12 +467,16 @@ class ProjetControllerTest {
 		u.setPrenom("Claire");
 		u.setSujet("sujet-" + email);
 		utilisateurRepository.save(u);
+		ajouterMembre(p, u, role);
+		return u;
+	}
+
+	private void ajouterMembre(Projet p, Utilisateur u, RoleProjet role) {
 		MembreProjet membre = new MembreProjet();
 		membre.setProjet(p);
 		membre.setUtilisateur(u);
 		membre.setRole(role);
 		membreProjetRepository.save(membre);
-		return u;
 	}
 
 }

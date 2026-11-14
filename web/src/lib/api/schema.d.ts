@@ -228,6 +228,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/utilisateurs/{id}/rattachement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["reinitialiserRattachement"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -263,6 +279,7 @@ export interface components {
             nom?: string;
             prenom?: string;
             actif?: boolean;
+            rattache?: boolean;
             audit?: components["schemas"]["AuditResponse"];
         };
         ProfilRequest: {
@@ -386,6 +403,8 @@ export interface components {
             /** Format: date */
             dateFin?: string;
             actif?: boolean;
+            /** @enum {string} */
+            monRole?: "MANAGER" | "BACKUP" | "CONTRIBUTEUR";
             audit?: components["schemas"]["AuditResponse"];
         };
         ClotureRequest: {
@@ -465,8 +484,8 @@ export interface components {
             du?: string;
             /** Format: date */
             au?: string;
-            periodeComplete?: boolean;
             periodeOrdonnee?: boolean;
+            periodeComplete?: boolean;
             periodeLimitee?: boolean;
         };
         ApiResponsePageResponseSaisieTempsResponse: {
@@ -1296,6 +1315,28 @@ export interface operations {
         };
     };
     delete_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    reinitialiserRattachement: {
         parameters: {
             query?: never;
             header?: never;

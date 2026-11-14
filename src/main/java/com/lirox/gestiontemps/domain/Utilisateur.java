@@ -45,7 +45,9 @@ public class Utilisateur extends EntiteAuditee {
 	 * par un administrateur : renseigné à la première connexion par rapprochement de l'email, par
 	 * {@code UtilisateurRepository.rattacherSujet} (sans changer la version ni l'audit) ; null tant
 	 * que l'utilisateur ne s'est jamais connecté. Fiche créée par l'utilisateur lui-même
-	 * (inscription) : renseigné dès la création.
+	 * (inscription) : renseigné dès la création. Remis à null par un administrateur
+	 * ({@code UtilisateurService.reinitialiserRattachement}) quand le compte a changé chez le
+	 * fournisseur : la fiche est alors reprise par l'email vérifié à la connexion suivante.
 	 */
 	@Column(unique = true, length = 255)
 	private String sujet;

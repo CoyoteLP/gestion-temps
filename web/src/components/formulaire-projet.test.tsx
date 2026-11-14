@@ -27,6 +27,7 @@ const projet: Projet = {
 	dateDebut: "2026-01-01",
 	dateFin: null,
 	actif: true,
+	monRole: null,
 	audit: null,
 }
 

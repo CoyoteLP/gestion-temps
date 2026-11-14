@@ -1,4 +1,4 @@
-import { UserXIcon } from "lucide-react"
+import { UnlinkIcon, UserXIcon } from "lucide-react"
 import Link from "next/link"
 
 import { AlerteErreur } from "@/components/alerte-erreur"
@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ApiError, valeurOuErreurApi } from "@/lib/api/erreurs"
 import { listerUtilisateurs } from "@/lib/api/utilisateurs"
 import { formaterDate, nomComplet } from "@/lib/format"
-import { changerActivationAction } from "@/lib/utilisateurs/actions"
+import { changerActivationAction, reinitialiserRattachementAction } from "@/lib/utilisateurs/actions"
 import { FILTRES_UTILISATEURS, type FiltreUtilisateurs } from "@/lib/utilisateurs/filtre"
 
 const CHEMIN = "/utilisateurs"
@@ -103,7 +103,29 @@ export async function ListeUtilisateurs({ filtre, page }: Props) {
 													<Badge variant="outline">Inactif</Badge>
 												)}
 											</TableCell>
-											<TableCell className="pr-4 text-right">
+											<TableCell className="space-x-1 pr-4 text-right whitespace-nowrap">
+												{utilisateur.rattache && (
+													<DialogueConfirmation
+														titre="Réinitialiser le rattachement ?"
+														description={`Le compte de connexion de ${nom} sera détaché de sa fiche ; elle sera reprise par le prochain compte qui se connectera avec l'email ${utilisateur.email}, vérifié par le service de connexion. À utiliser quand son compte a été recréé.`}
+														libelleConfirmation="Réinitialiser"
+														messageSucces={`Le rattachement du compte de ${nom} est réinitialisé.`}
+														action={reinitialiserRattachementAction.bind(
+															null,
+															utilisateur.id,
+														)}
+														declencheur={
+															<Button
+																variant="ghost"
+																size="icon-sm"
+																aria-label={`Réinitialiser le rattachement du compte de ${nom}`}
+																title="Réinitialiser le rattachement du compte"
+															>
+																<UnlinkIcon />
+															</Button>
+														}
+													/>
+												)}
 												{utilisateur.actif ? (
 													<DialogueConfirmation
 														titre="Désactiver ce compte ?"

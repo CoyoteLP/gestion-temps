@@ -16,7 +16,10 @@ export type Audit = Reponse<Schemas["AuditResponse"], "modifieLe" | "modifiePar"
 /** `audit` n'est renvoyé qu'aux administrateurs : `null` pour les autres. */
 type AvecAudit<T> = Omit<T, "audit"> & { audit: Audit | null }
 
-export type Projet = AvecAudit<Reponse<Schemas["ProjetResponse"], "description" | "dateDebut" | "dateFin">>
+/** `monRole` : rôle de l'utilisateur connecté dans le projet, `null` s'il n'en est pas membre. */
+export type Projet = AvecAudit<
+	Reponse<Schemas["ProjetResponse"], "description" | "dateDebut" | "dateFin" | "monRole">
+>
 
 export type Tache = AvecAudit<Reponse<Schemas["TacheResponse"], "description">>
 

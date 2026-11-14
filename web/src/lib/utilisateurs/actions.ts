@@ -4,7 +4,7 @@ import { refresh } from "next/cache"
 
 import type { EtatAction } from "@/lib/actions/etat-action"
 import { etatDonneesInvalides, etatErreur, identifiantValide, versionValide } from "@/lib/actions/resultats"
-import { lireUtilisateur, modifierUtilisateur } from "@/lib/api/utilisateurs"
+import { lireUtilisateur, modifierUtilisateur, reinitialiserRattachement } from "@/lib/api/utilisateurs"
 
 /**
  * Active (validation d'une inscription) ou désactive une fiche (administrateur), puis rafraîchit
@@ -33,6 +33,26 @@ export async function changerActivationAction(
 			actif,
 			version,
 		})
+	} catch (erreur) {
+		return etatErreur(erreur)
+	}
+	refresh()
+	return { statut: "succes" }
+}
+
+/**
+ * Réinitialise le rattachement d'une fiche à son compte de connexion (administrateur), puis
+ * rafraîchit la page : la fiche sera reprise par l'email vérifié à la connexion suivante.
+ *
+ * @param id identifiant de la fiche
+ * @returns l'état à afficher
+ */
+export async function reinitialiserRattachementAction(id: number): Promise<EtatAction<never>> {
+	if (!identifiantValide(id)) {
+		return etatDonneesInvalides()
+	}
+	try {
+		await reinitialiserRattachement(id)
 	} catch (erreur) {
 		return etatErreur(erreur)
 	}

@@ -17,6 +17,7 @@ import { lireProjet } from "@/lib/api/projets"
 import { utilisateurCourant } from "@/lib/auth/session"
 import { formaterPeriode } from "@/lib/format"
 import { lireIdentifiant } from "@/lib/identifiant"
+import { LIBELLES_ROLE_PROJET } from "@/lib/membres/schema-membre"
 import { lirePage } from "@/lib/pagination"
 import { supprimerProjetAction } from "@/lib/projets/actions"
 import { lireProjetDeLaPage } from "@/lib/projets/lecture"
@@ -100,6 +101,12 @@ async function FicheProjet({ params, searchParams }: Readonly<PageProps<"/projet
 								<Badge variant="outline">Inactif</Badge>
 							)}
 						</dd>
+						{projet.monRole && (
+							<>
+								<dt className="text-sm text-muted-foreground">Mon rôle</dt>
+								<dd>{LIBELLES_ROLE_PROJET[projet.monRole]}</dd>
+							</>
+						)}
 						<dt className="text-sm text-muted-foreground">Période</dt>
 						<dd>{formaterPeriode(projet.dateDebut, projet.dateFin)}</dd>
 						<dt className="text-sm text-muted-foreground">Description</dt>

@@ -102,3 +102,14 @@ export function lireUtilisateur(id: number): Promise<Utilisateur> {
 export function modifierUtilisateur(id: number, utilisateur: UtilisateurRequest): Promise<Utilisateur> {
 	return apiFetch<Utilisateur>(`${CHEMIN_UTILISATEURS}/${id}`, { methode: "PUT", corps: utilisateur })
 }
+
+/**
+ * Détache la fiche de son compte de connexion (administrateur) : elle sera reprise à la connexion
+ * suivante par le compte qui présente le même email vérifié. Sans effet sur une fiche non rattachée.
+ *
+ * @param id identifiant de la fiche
+ * @throws ApiError 404 si la fiche n'existe pas, 403 pour un non-administrateur
+ */
+export async function reinitialiserRattachement(id: number): Promise<void> {
+	await apiFetch<null>(`${CHEMIN_UTILISATEURS}/${id}/rattachement`, { methode: "DELETE" })
+}

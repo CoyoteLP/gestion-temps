@@ -9,7 +9,10 @@ import { FILTRES_UTILISATEURS } from "@/lib/utilisateurs/filtre"
 import { ListeUtilisateurs } from "./liste-utilisateurs"
 
 vi.mock("@/lib/api/utilisateurs", () => ({ listerUtilisateurs: vi.fn() }))
-vi.mock("@/lib/utilisateurs/actions", () => ({ changerActivationAction: vi.fn() }))
+vi.mock("@/lib/utilisateurs/actions", () => ({
+	changerActivationAction: vi.fn(),
+	reinitialiserRattachementAction: vi.fn(),
+}))
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
 const listerSimule = vi.mocked(listerUtilisateurs)
@@ -22,6 +25,7 @@ const fiche = (actif: boolean): Utilisateur => ({
 	nom: "Martin",
 	prenom: "Léa",
 	actif,
+	rattache: true,
 	audit: { creeLe: "2026-11-12T09:30:00Z", creePar: "lea", modifieLe: null, modifiePar: null },
 })
 
@@ -83,6 +87,26 @@ describe("ListeUtilisateurs", () => {
 		render(await ListeUtilisateurs({ filtre, page: 1 }))
 
 		expect(screen.getByText(message)).toBeInTheDocument()
+	})
+
+	it("propose de réinitialiser le rattachement d'une fiche rattachée", async () => {
+		listerSimule.mockResolvedValue(page([fiche(true)]))
+
+		render(await ListeUtilisateurs({ filtre: ACTIFS, page: 1 }))
+
+		expect(
+			screen.getByRole("button", { name: "Réinitialiser le rattachement du compte de Léa Martin" }),
+		).toBeInTheDocument()
+	})
+
+	it("ne le propose pas pour une fiche sans compte de connexion", async () => {
+		listerSimule.mockResolvedValue(page([{ ...fiche(true), rattache: false }]))
+
+		render(await ListeUtilisateurs({ filtre: ACTIFS, page: 1 }))
+
+		expect(
+			screen.queryByRole("button", { name: /Réinitialiser le rattachement/ }),
+		).not.toBeInTheDocument()
 	})
 
 	it("affiche l'erreur de l'API avec sa référence", async () => {

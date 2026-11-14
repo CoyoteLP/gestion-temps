@@ -20,6 +20,7 @@ const projet: Projet = {
 	dateDebut: null,
 	dateFin: null,
 	actif: true,
+	monRole: null,
 	audit: null,
 }
 
@@ -39,6 +40,26 @@ describe("ListeProjets", () => {
 		expect(listerSimule).toHaveBeenCalledWith(2)
 		expect(screen.getByRole("link", { name: "Application" })).toHaveAttribute("href", "/projets/12")
 		expect(screen.getByText("Sans limite")).toBeInTheDocument()
+	})
+
+	it("affiche le rôle de l'utilisateur dans chaque projet, et rien s'il n'en est pas membre", async () => {
+		listerSimule.mockResolvedValue({
+			contenu: [
+				{ ...projet, monRole: "CONTRIBUTEUR" },
+				{ ...projet, id: 13, code: "AUT", nom: "Autre", monRole: null },
+			],
+			page: 1,
+			taille: 20,
+			total: 2,
+			pages: 1,
+		})
+
+		await afficher(true)
+
+		expect(screen.getByRole("columnheader", { name: "Mon rôle" })).toBeInTheDocument()
+		const lignes = screen.getAllByRole("row")
+		expect(lignes[1]).toHaveTextContent("Contributeur")
+		expect(lignes[2]).not.toHaveTextContent(/Responsable|Suppléant|Contributeur/)
 	})
 
 	it("donne à l'administrateur l'accès direct à la modification", async () => {

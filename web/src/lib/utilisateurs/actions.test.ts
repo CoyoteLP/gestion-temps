@@ -3,14 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ApiError } from "@/lib/api/erreurs"
 import type { Utilisateur } from "@/lib/api/modeles"
-import { lireUtilisateur, modifierUtilisateur } from "@/lib/api/utilisateurs"
+import { lireUtilisateur, modifierUtilisateur, reinitialiserRattachement } from "@/lib/api/utilisateurs"
 
-import { changerActivationAction } from "./actions"
+import { changerActivationAction, reinitialiserRattachementAction } from "./actions"
 
 vi.mock("next/cache", () => ({ refresh: vi.fn() }))
 vi.mock("@/lib/api/utilisateurs", () => ({
 	lireUtilisateur: vi.fn(),
 	modifierUtilisateur: vi.fn(),
+	reinitialiserRattachement: vi.fn(),
 }))
 
 const lireSimule = vi.mocked(lireUtilisateur)
@@ -24,6 +25,7 @@ const fiche: Utilisateur = {
 	nom: "Martin",
 	prenom: "Léa",
 	actif: false,
+	rattache: true,
 	audit: null,
 }
 
@@ -86,5 +88,37 @@ describe("changerActivationAction", () => {
 
 		expect(etat.statut).toBe("erreur")
 		expect(lireSimule).not.toHaveBeenCalled()
+	})
+})
+
+describe("reinitialiserRattachementAction", () => {
+	const reinitialiserSimule = vi.mocked(reinitialiserRattachement)
+
+	beforeEach(() => {
+		reinitialiserSimule.mockReset()
+	})
+
+	it("détache la fiche puis rafraîchit la page", async () => {
+		reinitialiserSimule.mockResolvedValue()
+
+		await expect(reinitialiserRattachementAction(7)).resolves.toEqual({ statut: "succes" })
+		expect(reinitialiserSimule).toHaveBeenCalledWith(7)
+		expect(refreshSimule).toHaveBeenCalled()
+	})
+
+	it.each([0, -3, 1.5])("refuse un identifiant invalide (%s) sans appeler l'API", async (id) => {
+		await expect(reinitialiserRattachementAction(id)).resolves.toMatchObject({ statut: "erreur" })
+		expect(reinitialiserSimule).not.toHaveBeenCalled()
+	})
+
+	it("renvoie le refus de l'API sans rafraîchir", async () => {
+		reinitialiserSimule.mockRejectedValue(new ApiError(404, "Utilisateur introuvable", "id-404"))
+
+		await expect(reinitialiserRattachementAction(7)).resolves.toEqual({
+			statut: "erreur",
+			message: "Utilisateur introuvable",
+			identifiantCorrelation: "id-404",
+		})
+		expect(refreshSimule).not.toHaveBeenCalled()
 	})
 })

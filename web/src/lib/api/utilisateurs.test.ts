@@ -11,6 +11,7 @@ import {
 	listerUtilisateurs,
 	modifierMonProfil,
 	modifierUtilisateur,
+	reinitialiserRattachement,
 } from "./utilisateurs"
 
 vi.mock("./client", () => ({ apiFetch: vi.fn() }))
@@ -24,6 +25,7 @@ const fiche: Utilisateur = {
 	nom: "Dupont",
 	prenom: "Jean",
 	actif: true,
+	rattache: true,
 	audit: null,
 }
 
@@ -143,5 +145,14 @@ describe("fiche d'un utilisateur", () => {
 		await modifierUtilisateur(7, corps)
 
 		expect(apiFetchSimule).toHaveBeenCalledWith("/api/utilisateurs/7", { methode: "PUT", corps })
+	})
+})
+
+describe("reinitialiserRattachement", () => {
+	it("détache la fiche de son compte de connexion", async () => {
+		apiFetchSimule.mockResolvedValue(null)
+
+		await expect(reinitialiserRattachement(7)).resolves.toBeUndefined()
+		expect(apiFetchSimule).toHaveBeenCalledWith("/api/utilisateurs/7/rattachement", { methode: "DELETE" })
 	})
 })

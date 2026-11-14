@@ -132,6 +132,15 @@ Chacun gère sa propre fiche, même sans fiche ou avec une fiche inactive :
 La fiche créée par l'inscription est **inactive** : un administrateur la valide
 (`GET /api/utilisateurs?actif=false`, puis `PUT /api/utilisateurs/{id}` avec `actif: true`).
 
+Chaque fiche porte `rattache` : `true` si elle est rattachée à un compte de connexion (l'identifiant
+du compte n'est pas exposé). Un administrateur peut la détacher par
+`DELETE /api/utilisateurs/{id}/rattachement` (200, sans effet sur une fiche non rattachée), quand le
+compte a été recréé chez le fournisseur (« Inscription à finaliser » alors que la fiche existe) :
+la fiche est reprise à la connexion suivante par le compte qui présente le même email vérifié.
+
+Chaque projet renvoyé porte `monRole` : le rôle de l'appelant dans le projet (`MANAGER`, `BACKUP`,
+`CONTRIBUTEUR`), `null` s'il n'en est pas membre.
+
 ### Modification et accès concurrents
 
 Chaque ressource renvoyée porte un champ `version`. Une modification (`PUT`) doit renvoyer la
@@ -205,6 +214,9 @@ Sans jeton valide (signature, émetteur, audience, expiration) : 401.
   l'entreprise), `OIDC_EXIGER_EMAIL_VERIFIE=false` accepte son absence.
   Sans fiche, un utilisateur peut aussi s'inscrire lui-même (`POST /api/utilisateurs/moi`, voir
   « Compte de l'utilisateur connecté ») : sa fiche est alors rattachée à son compte dès sa création.
+  Une fiche rattachée n'est jamais reprise par un autre compte, même de même email ; si le compte
+  est recréé chez le fournisseur, l'administrateur réinitialise le rattachement
+  (`DELETE /api/utilisateurs/{id}/rattachement`, ou l'écran Utilisateurs du front).
 
 ### Keycloak de développement
 
@@ -228,7 +240,8 @@ Dans `.env` : `OIDC_ISSUER_URI=http://localhost:8180/realms/gestion-temps` et
 Ces comptes ont un identifiant fixe dans le royaume (`id`, repris dans la revendication `sub`) : une
 fiche rattachée à l'un d'eux le reste après la recréation du conteneur Keycloak. Un compte créé par
 inscription reçoit un nouvel identifiant à chaque réimport ; sa fiche, déjà rattachée à l'ancien,
-n'est alors plus retrouvée (« Inscription à finaliser ») : vider sa colonne `sujet` en base de dev.
+n'est alors plus retrouvée (« Inscription à finaliser ») : réinitialiser son rattachement en
+administrateur (écran Utilisateurs, ou `DELETE /api/utilisateurs/{id}/rattachement`).
 
 L'administrateur n'a pas besoin d'exister dans l'API ; les collaborateurs doivent y être créés avec
 le même email pour que leur compte soit rattaché :
@@ -297,9 +310,11 @@ ou « Compte en attente de validation ». En dev :
 tâches) ; l'administrateur les voit tous. L'administrateur crée, modifie et supprime projets et tâches (une ressource encore
 utilisée ne se supprime pas : le message de l'API invite à la désactiver), et gère les membres d'un
 projet (section « Membres » de la fiche, invisible des autres utilisateurs ; rôles Responsable,
-Suppléant et Contributeur, ce dernier proposé par défaut). La page
-« Utilisateurs », réservée à l'administrateur, liste les comptes (en attente par défaut) et les
-active ou les désactive.
+Suppléant et Contributeur, ce dernier proposé par défaut). La liste et la fiche d'un projet
+indiquent le rôle de l'utilisateur connecté (« Mon rôle »). La page « Utilisateurs », réservée à
+l'administrateur, liste les comptes (en attente par défaut), les active ou les désactive, et
+réinitialise le rattachement d'une fiche à son compte de connexion (icône de lien rompu, avec
+confirmation) quand ce compte a été recréé.
 
 La page Profil modifie le nom et le prénom de la fiche ; le mot de passe et l'email se gèrent dans
 la console de compte de Keycloak (lien « Gérer mon compte de connexion »).
