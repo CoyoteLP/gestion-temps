@@ -8,6 +8,7 @@ import { listerProjets } from "@/lib/api/projets"
 import { ListeProjets } from "./liste-projets"
 
 vi.mock("@/lib/api/projets", () => ({ listerProjets: vi.fn() }))
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }))
 
 const listerSimule = vi.mocked(listerProjets)
 
@@ -30,14 +31,19 @@ beforeEach(() => {
 })
 
 async function afficher(estAdmin: boolean) {
-	render(await ListeProjets({ page: 2, estAdmin }))
+	render(await ListeProjets({ parametres: { page: "2" }, estAdmin }))
 }
 
 describe("ListeProjets", () => {
 	it("liste les projets de la page demandée ; le nom ouvre la fiche", async () => {
 		await afficher(false)
 
-		expect(listerSimule).toHaveBeenCalledWith(2)
+		expect(listerSimule).toHaveBeenCalledWith({
+			page: 2,
+			tri: null,
+			sens: "asc",
+			filtres: { code: "", nom: "", actif: "" },
+		})
 		expect(screen.getByRole("link", { name: "Application" })).toHaveAttribute("href", "/projets/12")
 		expect(screen.getByText("Sans limite")).toBeInTheDocument()
 	})
@@ -57,9 +63,10 @@ describe("ListeProjets", () => {
 		await afficher(true)
 
 		expect(screen.getByRole("columnheader", { name: "Mon rôle" })).toBeInTheDocument()
-		const lignes = screen.getAllByRole("row")
-		expect(lignes[1]).toHaveTextContent("Contributeur")
-		expect(lignes[2]).not.toHaveTextContent(/Responsable|Suppléant|Contributeur/)
+		expect(screen.getByRole("row", { name: /Application/ })).toHaveTextContent("Contributeur")
+		expect(screen.getByRole("row", { name: /Autre/ })).not.toHaveTextContent(
+			/Responsable|Suppléant|Contributeur/,
+		)
 	})
 
 	it("donne à l'administrateur l'accès direct à la modification", async () => {

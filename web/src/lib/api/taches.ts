@@ -1,22 +1,28 @@
 import "server-only"
 
-import { TAILLE_PAGE } from "@/lib/constantes"
+import { type EtatListe, versActif } from "@/lib/listes/etat-liste"
 
 import { apiFetch } from "./client"
 import type { Tache, TacheRequest } from "./modeles"
+import { parametresTri } from "./parametres-liste"
 import type { PageResponse } from "./types"
 
 const CHEMIN_TACHES = "/api/taches"
 
 /**
  * @param projetId projet dont on lit les tâches
- * @param page     numéro de page, à partir de 1
- * @returns une page de tâches du projet, triées par l'API
+ * @param etat     page, tri et filtres de la liste (libellé, statut)
+ * @returns une page de tâches du projet, triées et filtrées par l'API
  * @throws ApiError si l'API refuse ou est injoignable
  */
-export function listerTaches(projetId: number, page: number): Promise<PageResponse<Tache>> {
+export function listerTaches(projetId: number, etat: EtatListe): Promise<PageResponse<Tache>> {
 	return apiFetch<PageResponse<Tache>>(CHEMIN_TACHES, {
-		parametres: { projetId, page, taille: TAILLE_PAGE },
+		parametres: {
+			projetId,
+			...parametresTri(etat),
+			libelle: etat.filtres.libelle,
+			actif: versActif(etat.filtres.actif),
+		},
 	})
 }
 

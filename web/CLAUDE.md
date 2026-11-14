@@ -89,8 +89,15 @@ src/
 - Une fonction par appel, regroupées par ressource (`src/lib/api/projets.ts` : `listerProjets`),
   typées avec les modèles de `modeles.ts`, eux-mêmes dérivés du schéma généré `schema.d.ts` (fichier
   versionné, jamais modifié à la main : `npm run api:types` après un changement de l'API).
-- Listes paginées : `PageResponse<T>` ; page lue dans l'URL avec `lirePage()`, taille `TAILLE_PAGE`.
-  Le tri est imposé par l'API.
+- Listes : **toujours `TableauListe`** (`src/components/tableau-liste.tsx`), seul mécanisme de tri et
+  de filtre de l'application. Colonnes déclarées dans `src/lib/listes/definitions.ts` (clés = colonnes
+  de tri et filtres de l'API, filtre `texte` ou `choix`, préfixe si la page affiche deux listes) ;
+  état lu dans l'URL avec `lireEtatListe` (valeurs inconnues ignorées), transmis à la fonction
+  d'API (`listerProjets(etat)`, paramètres communs `parametresTri`). Tri, filtres et pagination sont
+  faits par l'API sur toute la liste, jamais dans le navigateur ; les lignes reprennent les classes
+  des colonnes et se terminent toujours par une cellule d'actions (vide s'il n'y en a pas) : la loupe
+  qui affiche ou masque la ligne de filtres est au-dessus (filtres repliés par défaut, ouverts si un
+  filtre est actif).
 - Chemin passé à `apiFetch` : `/api/…` fait de segments simples, avec des identifiants vérifiés
   (nombres : `identifiantValide`, `lireIdentifiant`) ; jamais une chaîne venue du navigateur telle
   quelle. `construireUrl` refuse tout autre chemin (`//hôte`, `..`, retour à la ligne) avant

@@ -2,12 +2,14 @@ import "server-only"
 
 import { cache } from "react"
 
-import { TAILLE_PAGE, TAILLE_PAGE_MAX } from "@/lib/constantes"
+import { TAILLE_PAGE_MAX } from "@/lib/constantes"
+import { type EtatListe, versActif } from "@/lib/listes/etat-liste"
 
 import { apiFetch } from "./client"
 import { ApiError } from "./erreurs"
 import type { ProfilRequest, Utilisateur, UtilisateurRequest } from "./modeles"
 import { lireToutesLesPages } from "./pages"
+import { parametresTri } from "./parametres-liste"
 import type { PageResponse } from "./types"
 
 const CHEMIN_UTILISATEURS = "/api/utilisateurs"
@@ -56,19 +58,19 @@ export function modifierMonProfil(profil: ProfilRequest): Promise<Utilisateur> {
 /**
  * Liste des fiches, réservée à l'administrateur.
  *
- * @param actif filtre sur le statut (`false` = en attente de validation ou désactivées) ; tous si absent
- * @param page  numéro de page, à partir de 1
- * @param taille nombre de fiches par page
- * @returns une page de fiches, triées par l'API
+ * @param etat page, tri et filtres de la liste (nom ou prénom, email, statut : `inactif` = en
+ *             attente de validation ou désactivées, `tous`)
+ * @returns une page de fiches, triées et filtrées par l'API
  * @throws ApiError 403 pour un non-administrateur
  */
-export function listerUtilisateurs(
-	actif: boolean | undefined,
-	page: number,
-	taille: number = TAILLE_PAGE,
-): Promise<PageResponse<Utilisateur>> {
+export function listerUtilisateurs(etat: EtatListe): Promise<PageResponse<Utilisateur>> {
 	return apiFetch<PageResponse<Utilisateur>>(CHEMIN_UTILISATEURS, {
-		parametres: { actif, page, taille },
+		parametres: {
+			...parametresTri(etat),
+			nom: etat.filtres.nom,
+			email: etat.filtres.email,
+			actif: versActif(etat.filtres.actif),
+		},
 	})
 }
 
@@ -79,7 +81,11 @@ export function listerUtilisateurs(
  * @throws ApiError 403 pour un non-administrateur
  */
 export function listerTousLesUtilisateursActifs(): Promise<Utilisateur[]> {
-	return lireToutesLesPages((page) => listerUtilisateurs(true, page, TAILLE_PAGE_MAX))
+	return lireToutesLesPages((page) =>
+		apiFetch<PageResponse<Utilisateur>>(CHEMIN_UTILISATEURS, {
+			parametres: { actif: true, page, taille: TAILLE_PAGE_MAX },
+		}),
+	)
 }
 
 /**

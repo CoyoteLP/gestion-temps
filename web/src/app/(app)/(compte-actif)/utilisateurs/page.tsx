@@ -5,8 +5,6 @@ import { EnTetePage } from "@/components/en-tete-page"
 import { ListeUtilisateurs } from "@/components/liste-utilisateurs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { exigerAdmin } from "@/lib/auth/session"
-import { lirePage } from "@/lib/pagination"
-import { lireFiltreUtilisateurs } from "@/lib/utilisateurs/filtre"
 
 export const metadata: Metadata = { title: "Utilisateurs" }
 
@@ -39,11 +37,5 @@ export default function PageUtilisateurs({ searchParams }: PageProps<"/utilisate
 /** Réservé à l'administrateur (les autres reçoivent la page « introuvable »). */
 async function Utilisateurs({ searchParams }: Readonly<Pick<PageProps<"/utilisateurs">, "searchParams">>) {
 	await exigerAdmin()
-	const parametres = await searchParams
-	return (
-		<ListeUtilisateurs
-			filtre={lireFiltreUtilisateurs(parametres.statut)}
-			page={lirePage(parametres.page)}
-		/>
-	)
+	return <ListeUtilisateurs parametres={await searchParams} />
 }

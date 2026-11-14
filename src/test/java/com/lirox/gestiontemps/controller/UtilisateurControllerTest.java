@@ -1,6 +1,7 @@
 package com.lirox.gestiontemps.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.nullValue;
@@ -536,6 +537,49 @@ class UtilisateurControllerTest {
 		utilisateur.setEmail(email);
 		utilisateur.setNom("Dupont");
 		utilisateur.setPrenom("Jean");
+		return utilisateurRepository.save(utilisateur);
+	}
+
+	// Tri et filtres de la liste (paramètres tri, sens, nom, email, actif)
+
+	@Test
+	void trieLesUtilisateursParNomPuisParPrenom() throws Exception {
+		saveNomme("lea@lirox.com", "Martin", "Léa");
+		saveNomme("zoe@lirox.com", "Dupont", "Zoé");
+		saveNomme("anne@lirox.com", "dupont", "Anne");
+
+		mockMvc.perform(get("/api/utilisateurs").param("tri", "nom"))
+				.andExpect(jsonPath("$.data.contenu[*].email")
+						.value(contains("anne@lirox.com", "zoe@lirox.com", "lea@lirox.com")));
+		mockMvc.perform(get("/api/utilisateurs").param("tri", "email").param("sens", "desc"))
+				.andExpect(jsonPath("$.data.contenu[*].email")
+						.value(contains("zoe@lirox.com", "lea@lirox.com", "anne@lirox.com")));
+	}
+
+	@Test
+	void filtreLeNomSurLeNomOuLePrenomSansAccent() throws Exception {
+		saveNomme("lea@lirox.com", "Martin", "Léa");
+		saveNomme("leon@lirox.com", "Leandri", "Paul");
+		saveNomme("zoe@lirox.com", "Dupont", "Zoé");
+
+		mockMvc.perform(get("/api/utilisateurs").param("nom", "lea").param("tri", "email"))
+				.andExpect(jsonPath("$.data.contenu[*].email").value(contains("lea@lirox.com", "leon@lirox.com")));
+		mockMvc.perform(get("/api/utilisateurs").param("email", "ZOE"))
+				.andExpect(jsonPath("$.data.contenu[*].email").value(contains("zoe@lirox.com")));
+	}
+
+	@Test
+	void refuseUneColonneDeTriDesUtilisateursInconnue() throws Exception {
+		mockMvc.perform(get("/api/utilisateurs").param("tri", "sujet"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value(containsString("nom, email, creeLe, actif")));
+	}
+
+	private Utilisateur saveNomme(String email, String nom, String prenom) {
+		Utilisateur utilisateur = new Utilisateur();
+		utilisateur.setEmail(email);
+		utilisateur.setNom(nom);
+		utilisateur.setPrenom(prenom);
 		return utilisateurRepository.save(utilisateur);
 	}
 

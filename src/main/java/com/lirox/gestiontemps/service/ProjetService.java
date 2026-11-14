@@ -5,16 +5,17 @@ import java.util.Map;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.lirox.gestiontemps.common.MotifRecherche;
 import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.domain.RoleProjet;
 import com.lirox.gestiontemps.dto.PageResponse;
 import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.ProjetRequest;
 import com.lirox.gestiontemps.dto.ProjetResponse;
+import com.lirox.gestiontemps.dto.RechercheProjetsRequest;
 import com.lirox.gestiontemps.exception.AccesRefuseException;
 import com.lirox.gestiontemps.exception.DuplicateResourceException;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
@@ -43,16 +44,18 @@ public class ProjetService {
 	private final AccesProjetService accesProjetService;
 
 	/**
+	 * @param recherche  filtres (code, nom, statut) et tri choisis parmi les colonnes admises
 	 * @param pagination page demandée
-	 * @return une page de projets, par identifiant croissant : tous pour un administrateur, ceux dont
-	 *         il est membre pour un collaborateur ; chacun avec le rôle de l'appelant ({@code monRole},
-	 *         lu en une seule requête pour la page)
+	 * @return une page de projets (identifiant croissant sans tri choisi) : tous pour un
+	 *         administrateur, ceux dont il est membre pour un collaborateur ; chacun avec le rôle de
+	 *         l'appelant ({@code monRole}, lu en une seule requête pour la page)
 	 */
-	public PageResponse<ProjetResponse> findAll(PaginationRequest pagination) {
-		PageRequest page = pagination.versPageRequest(Sort.by("id"));
+	public PageResponse<ProjetResponse> findAll(RechercheProjetsRequest recherche, PaginationRequest pagination) {
+		PageRequest page = pagination.versPageRequest(recherche.tri(), recherche.sens());
 		Long moi = accesProjetService.idFicheCourante();
-		Page<Projet> projets = accesProjetService.estAdmin() ? projetRepository.findAll(page)
-				: projetRepository.findDontMembre(moi, page);
+		Long restreint = accesProjetService.estAdmin() ? null : moi;
+		Page<Projet> projets = projetRepository.search(MotifRecherche.contient(recherche.code()),
+				MotifRecherche.contient(recherche.nom()), recherche.actif(), restreint, page);
 		Map<Long, RoleProjet> roles = moi == null ? Map.of()
 				: accesProjetService.rolesDans(projets.map(Projet::getId).getContent(), moi);
 		return PageResponse.from(projets, projet -> ProjetResponse.from(projet, roles.get(projet.getId())));

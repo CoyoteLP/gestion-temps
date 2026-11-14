@@ -38,21 +38,34 @@ const membre = (utilisateur: Utilisateur | null, utilisateurId = 7): MembreAffic
 	utilisateur,
 })
 
+const pageDe = (contenu: MembreAffiche[]) => ({
+	contenu,
+	page: 1,
+	taille: 20,
+	total: contenu.length,
+	pages: 1,
+})
+
 beforeEach(() => {
 	lireSimule.mockReset()
 })
 
 async function afficher() {
-	render(await MembresProjet({ projetId: 3 }))
+	render(await MembresProjet({ projetId: 3, parametres: { "membres.tri": "role" } }))
 }
 
 describe("MembresProjet", () => {
 	it("liste les membres du projet avec leur nom, leur email et leur rôle", async () => {
-		lireSimule.mockResolvedValue({ membres: [membre(lea)], candidats: [] })
+		lireSimule.mockResolvedValue({ membres: pageDe([membre(lea)]), candidats: [] })
 
 		await afficher()
 
-		expect(lireSimule).toHaveBeenCalledWith(3)
+		expect(lireSimule).toHaveBeenCalledWith(3, {
+			page: 1,
+			tri: "role",
+			sens: "asc",
+			filtres: { nom: "", email: "", role: "" },
+		})
 		expect(screen.getByRole("cell", { name: "Léa Martin" })).toBeInTheDocument()
 		expect(screen.getByText("lea@exemple.fr")).toBeInTheDocument()
 		expect(screen.getByText("Responsable")).toBeInTheDocument()
@@ -62,7 +75,7 @@ describe("MembresProjet", () => {
 
 	it("affiche le libellé de chaque rôle, dont Contributeur", async () => {
 		lireSimule.mockResolvedValue({
-			membres: [membre(lea), { ...membre(null, 30), id: 6, role: "CONTRIBUTEUR" }],
+			membres: pageDe([membre(lea), { ...membre(null, 30), id: 6, role: "CONTRIBUTEUR" }]),
 			candidats: [],
 		})
 
@@ -73,7 +86,7 @@ describe("MembresProjet", () => {
 	})
 
 	it("signale un membre dont la fiche est désactivée", async () => {
-		lireSimule.mockResolvedValue({ membres: [membre({ ...lea, actif: false })], candidats: [] })
+		lireSimule.mockResolvedValue({ membres: pageDe([membre({ ...lea, actif: false })]), candidats: [] })
 
 		await afficher()
 
@@ -81,7 +94,7 @@ describe("MembresProjet", () => {
 	})
 
 	it("désigne par son numéro un membre dont la fiche a disparu", async () => {
-		lireSimule.mockResolvedValue({ membres: [membre(null, 30)], candidats: [] })
+		lireSimule.mockResolvedValue({ membres: pageDe([membre(null, 30)]), candidats: [] })
 
 		await afficher()
 
@@ -89,7 +102,7 @@ describe("MembresProjet", () => {
 	})
 
 	it("affiche une liste vide, avec l'ajout toujours possible", async () => {
-		lireSimule.mockResolvedValue({ membres: [], candidats: [lea] })
+		lireSimule.mockResolvedValue({ membres: pageDe([]), candidats: [lea] })
 
 		await afficher()
 

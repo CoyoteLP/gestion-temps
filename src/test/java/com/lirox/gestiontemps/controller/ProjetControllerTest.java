@@ -2,6 +2,7 @@ package com.lirox.gestiontemps.controller;
 
 import static com.lirox.gestiontemps.JetonsDeTest.collaborateur;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -13,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -354,6 +356,113 @@ class ProjetControllerTest {
 		return champs.entrySet().stream()
 				.map(e -> "\"" + e.getKey() + "\": \"" + e.getValue() + "\"")
 				.collect(Collectors.joining(", ", "{", "}"));
+	}
+
+	// Tri et filtres de la liste (paramètres tri, sens, code, nom, actif)
+
+	@Test
+	void trieLesProjetsParNomDansLesDeuxSensPuisParIdentifiant() throws Exception {
+		Projet bravo1 = save("P1", "Bravo", null, true);
+		Projet alpha = save("P2", "alpha", null, true);
+		Projet bravo2 = save("P3", "Bravo", null, true);
+
+		mockMvc.perform(get("/api/projets").param("tri", "nom"))
+				.andExpect(jsonPath("$.data.contenu[*].code").value(contains("P2", "P1", "P3")));
+		mockMvc.perform(get("/api/projets").param("tri", "nom").param("sens", "desc"))
+				// Noms égaux : départagés par identifiant croissant, quel que soit le sens
+				.andExpect(jsonPath("$.data.contenu[*].id").value(contains(bravo1.getId().intValue(),
+						bravo2.getId().intValue(), alpha.getId().intValue())));
+	}
+
+	@Test
+	void unProjetSansDateDeDebutVientEnDernierDansLesDeuxSens() throws Exception {
+		save("SANS", "Sans date", null, true);
+		save("TOT", "Tôt", LocalDate.of(2026, 1, 1), true);
+		save("TARD", "Tard", LocalDate.of(2026, 6, 1), true);
+
+		mockMvc.perform(get("/api/projets").param("tri", "dateDebut"))
+				.andExpect(jsonPath("$.data.contenu[*].code").value(contains("TOT", "TARD", "SANS")));
+		mockMvc.perform(get("/api/projets").param("tri", "dateDebut").param("sens", "desc"))
+				.andExpect(jsonPath("$.data.contenu[*].code").value(contains("TARD", "TOT", "SANS")));
+	}
+
+	@Test
+	void filtreLeNomSansTenirCompteDeLaCasseNiDesAccents() throws Exception {
+		save("EQ", "Équipe support", null, true);
+		save("AUT", "Autre", null, true);
+
+		mockMvc.perform(get("/api/projets").param("nom", "EQUIPE"))
+				.andExpect(jsonPath("$.data.total").value(1))
+				.andExpect(jsonPath("$.data.contenu[0].code").value("EQ"));
+	}
+
+	@Test
+	void filtreCherchePourcentEtSouligneTelsQuels() throws Exception {
+		save("POUR", "Remise 100% client", null, true);
+		save("SOUL", "Projet_interne", null, true);
+		save("AUT", "Projet interne", null, true);
+
+		mockMvc.perform(get("/api/projets").param("nom", "%"))
+				.andExpect(jsonPath("$.data.contenu[*].code").value(contains("POUR")));
+		mockMvc.perform(get("/api/projets").param("nom", "t_i"))
+				.andExpect(jsonPath("$.data.contenu[*].code").value(contains("SOUL")));
+	}
+
+	@Test
+	void combineLesFiltresDeCodeEtDeStatut() throws Exception {
+		save("APP-1", "Application", null, true);
+		save("APP-2", "Application archivée", null, false);
+		save("WEB-1", "Site", null, true);
+
+		mockMvc.perform(get("/api/projets").param("code", "app").param("actif", "true"))
+				.andExpect(jsonPath("$.data.contenu[*].code").value(contains("APP-1")));
+	}
+
+	@Test
+	void unCollaborateurFiltreParmiSesProjetsSeulement() throws Exception {
+		Projet sien = save("APP-1", "Application", null, true);
+		save("APP-2", "Application voisine", null, true);
+		Utilisateur contributeur = saveMembre(sien, "cdurand@lirox.com", RoleProjet.CONTRIBUTEUR);
+
+		mockMvc.perform(get("/api/projets").param("nom", "application").with(collaborateur(contributeur)))
+				.andExpect(jsonPath("$.data.contenu[*].code").value(contains("APP-1")));
+	}
+
+	@Test
+	void refuseUneColonneDeTriInconnueEnListantLesValeursAdmises() throws Exception {
+		mockMvc.perform(get("/api/projets").param("tri", "description"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value(containsString("tri")))
+				.andExpect(jsonPath("$.message").value(containsString("code, nom, dateDebut, actif")));
+	}
+
+	@Test
+	void refuseUnSensInconnuEtUnFiltreTropLong() throws Exception {
+		mockMvc.perform(get("/api/projets").param("tri", "nom").param("sens", "haut"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value(containsString("asc, desc")));
+		mockMvc.perform(get("/api/projets").param("nom", "x".repeat(101)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value(containsString("nom")));
+	}
+
+	@Test
+	void sansTriLOrdreResteParIdentifiant() throws Exception {
+		Projet premier = save("ZZZ", "Zèbre", null, true);
+		Projet second = save("AAA", "Abeille", null, true);
+
+		mockMvc.perform(get("/api/projets"))
+				.andExpect(jsonPath("$.data.contenu[*].id")
+						.value(contains(premier.getId().intValue(), second.getId().intValue())));
+	}
+
+	private Projet save(String code, String nom, LocalDate dateDebut, boolean actif) {
+		Projet projet = new Projet();
+		projet.setCode(code);
+		projet.setNom(nom);
+		projet.setDateDebut(dateDebut);
+		projet.setActif(actif);
+		return projetRepository.save(projet);
 	}
 
 	private Projet save(String code) {

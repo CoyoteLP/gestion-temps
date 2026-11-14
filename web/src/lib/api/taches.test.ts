@@ -1,11 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import type { EtatListe } from "@/lib/listes/etat-liste"
+
 import { apiFetch } from "./client"
 import { creerTache, listerTaches, modifierTache, supprimerTache } from "./taches"
 
 vi.mock("./client", () => ({ apiFetch: vi.fn() }))
 
 const apiFetchSimule = vi.mocked(apiFetch)
+
+/** État d'une liste sans tri ni filtre, à la page donnée. */
+const etat = (page = 1, autres: Partial<EtatListe> = {}): EtatListe => ({
+	page,
+	tri: null,
+	sens: "asc",
+	filtres: {},
+	...autres,
+})
 
 const requete = { projetId: 3, libelle: "Développement", actif: true }
 
@@ -16,10 +27,18 @@ beforeEach(() => {
 
 describe("taches", () => {
 	it("liste une page des tâches d'un projet", async () => {
-		await listerTaches(3, 2)
+		await listerTaches(3, etat(2, { tri: "libelle", filtres: { libelle: "rec", actif: "actif" } }))
 
 		expect(apiFetchSimule).toHaveBeenCalledWith("/api/taches", {
-			parametres: { projetId: 3, page: 2, taille: 20 },
+			parametres: {
+				projetId: 3,
+				page: 2,
+				taille: 20,
+				tri: "libelle",
+				sens: "asc",
+				libelle: "rec",
+				actif: true,
+			},
 		})
 	})
 

@@ -19,6 +19,7 @@ import com.lirox.gestiontemps.dto.MembreProjetRequest;
 import com.lirox.gestiontemps.dto.MembreProjetResponse;
 import com.lirox.gestiontemps.dto.PageResponse;
 import com.lirox.gestiontemps.dto.PaginationRequest;
+import com.lirox.gestiontemps.dto.RechercheMembresRequest;
 import com.lirox.gestiontemps.service.MembreProjetService;
 import com.lirox.gestiontemps.validation.Modification;
 
@@ -38,15 +39,17 @@ public class MembreProjetController {
 	private final MembreProjetService membreProjetService;
 
 	/**
-	 * {@code GET /api/projets/{projetId}/membres} : membres du projet.
+	 * {@code GET /api/projets/{projetId}/membres?nom=&email=&role=&tri=&sens=} : membres du projet.
 	 *
-	 * @param projetId identifiant du projet
+	 * @param projetId   identifiant du projet
+	 * @param recherche  filtres et tri (colonnes admises : {@code TriMembre})
+	 * @param pagination page demandée
 	 * @return les membres du projet (404 si le projet n'existe pas)
 	 */
 	@GetMapping
 	public ApiResponse<PageResponse<MembreProjetResponse>> findAll(@PathVariable Long projetId,
-			@Valid PaginationRequest pagination) {
-		return ApiResponse.success(membreProjetService.findAll(projetId, pagination));
+			@Valid RechercheMembresRequest recherche, @Valid PaginationRequest pagination) {
+		return ApiResponse.success(membreProjetService.findAll(projetId, recherche, pagination));
 	}
 
 	/**

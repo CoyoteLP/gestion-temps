@@ -29,19 +29,6 @@ public interface ProjetRepository extends JpaRepository<Projet, Long> {
 	boolean existsByCode(String code);
 
 	/**
-	 * Projets visibles par un collaborateur : ceux dont il est membre, quel que soit son rôle.
-	 *
-	 * @param utilisateurId identifiant de l'utilisateur
-	 * @param page          page et tri demandés
-	 * @return la page des projets dont l'utilisateur est membre
-	 */
-	@Query("""
-			select p from Projet p
-			where exists (select m from MembreProjet m where m.projet = p and m.utilisateur.id = :utilisateurId)
-			""")
-	Page<Projet> findDontMembre(@Param("utilisateurId") Long utilisateurId, Pageable page);
-
-	/**
 	 * Contrôle d'unicité du code lors d'une modification.
 	 *
 	 * @param code code de projet
@@ -85,5 +72,27 @@ public interface ProjetRepository extends JpaRepository<Projet, Long> {
 	@QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = Constantes.DELAI_VERROU_PROJET_MS))
 	@Query("select p from Projet p where p.actif = true order by p.id")
 	List<Projet> findActifsVerrouilles();
+
+	/**
+	 * Recherche filtrée, paginée et triée selon {@code page} (un paramètre null n'est pas filtré). Les
+	 * motifs texte viennent de {@code MotifRecherche.contient} : échappés avec {@code !}.
+	 *
+	 * @param code          motif du code
+	 * @param nom           motif du nom
+	 * @param actif         statut
+	 * @param utilisateurId restreint aux projets dont cet utilisateur est membre (null : tous)
+	 * @param page          page et tri demandés
+	 * @return la page de projets correspondants
+	 */
+	@Query("""
+			select p from Projet p
+			where (:code is null or p.code like :code escape '!')
+			  and (:nom is null or p.nom like :nom escape '!')
+			  and (:actif is null or p.actif = :actif)
+			  and (:utilisateurId is null or exists (
+			      select m from MembreProjet m where m.projet = p and m.utilisateur.id = :utilisateurId))
+			""")
+	Page<Projet> search(@Param("code") String code, @Param("nom") String nom, @Param("actif") Boolean actif,
+			@Param("utilisateurId") Long utilisateurId, Pageable page);
 
 }

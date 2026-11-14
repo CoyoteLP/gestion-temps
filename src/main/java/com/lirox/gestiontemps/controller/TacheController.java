@@ -11,13 +11,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.lirox.gestiontemps.dto.ApiResponse;
 import com.lirox.gestiontemps.dto.PageResponse;
 import com.lirox.gestiontemps.dto.PaginationRequest;
+import com.lirox.gestiontemps.dto.RechercheTachesRequest;
 import com.lirox.gestiontemps.dto.TacheRequest;
 import com.lirox.gestiontemps.dto.TacheResponse;
 import com.lirox.gestiontemps.service.TacheService;
@@ -38,15 +38,16 @@ public class TacheController {
 	private final TacheService tacheService;
 
 	/**
-	 * {@code GET /api/taches?projetId=} : liste des tâches.
+	 * {@code GET /api/taches?projetId=&libelle=&actif=&tri=&sens=} : liste paginée des tâches.
 	 *
-	 * @param projetId filtre optionnel sur le projet
+	 * @param recherche  projet, filtres et tri (colonnes admises : {@code TriTache})
+	 * @param pagination page demandée
 	 * @return les tâches correspondantes
 	 */
 	@GetMapping
-	public ApiResponse<PageResponse<TacheResponse>> findAll(@RequestParam(required = false) Long projetId,
+	public ApiResponse<PageResponse<TacheResponse>> findAll(@Valid RechercheTachesRequest recherche,
 			@Valid PaginationRequest pagination) {
-		return ApiResponse.success(tacheService.findAll(projetId, pagination));
+		return ApiResponse.success(tacheService.findAll(recherche, pagination));
 	}
 
 	/**

@@ -234,11 +234,16 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - `POST` → 201 + en-tête `Location` ; `DELETE` → 200 avec `data: null` et un message de confirmation.
   Exception : un `POST` qui crée plusieurs ressources d'un coup renvoie 201 avec leur liste (éventuellement
   vide) et un message, sans `Location` (voir `POST /api/clotures/tous-projets`).
-- Les filtres de liste sont des `@RequestParam(required = false)`, ou un record validé lu dans les
-  paramètres (`@Valid RechercheSaisiesRequest`) quand des règles portent sur plusieurs filtres.
+- Les filtres et le tri d'une liste sont lus dans un record validé (`@Valid RechercheProjetsRequest`,
+  `RechercheSaisiesRequest`…). Filtre texte « contient » : motif de `MotifRecherche.contient`
+  (jokers échappés), passé en paramètre lié avec `like :x escape '!'` ; casse et accents ignorés par
+  la collation de la base.
 - Toute liste est paginée : paramètre `@Valid PaginationRequest pagination`, réponse
-  `ApiResponse<PageResponse<T>>` (`PageResponse.from(page, XxxResponse::from)`) ; le tri est imposé
-  par le service (`pagination.versPageRequest(Sort.by(...))`), jamais choisi par le client.
+  `ApiResponse<PageResponse<T>>` (`PageResponse.from(page, XxxResponse::from)`). Le client choisit le
+  tri (`tri`, `sens`) parmi une **liste blanche** déclarée par la ressource (énumération
+  `ColonneTri`, ex. `TriProjet`) : une autre valeur → 400 ; le service impose l'ordre par défaut
+  (identifiant) et le départage par identifiant (`pagination.versPageRequest(tri, sens)`). Jamais
+  de nom de propriété fourni librement par le client.
 
 ## Sécurité
 
@@ -288,7 +293,10 @@ Toutes les réponses, succès comme erreurs, utilisent l'enveloppe `ApiResponse`
 
 Ne jamais renvoyer un objet nu ni un `ProblemDetail` depuis un contrôleur. Pour signaler une
 erreur, **lever une exception héritant de `ApplicationException`** ; ne jamais lever une
-`RuntimeException` brute (ni `IllegalArgumentException`, `IllegalStateException`…).
+`RuntimeException` brute (ni `IllegalArgumentException`, `IllegalStateException`…). Seule exception :
+un convertisseur Spring de paramètre (`Converter`) signale une valeur invalide par
+`IllegalArgumentException`, son contrat ; Spring la traduit en erreur de liaison, donc en 400 (voir
+`ConversionParametresConfig`).
 
 Chaque exception porte son code HTTP, que `GlobalExceptionHandler` applique automatiquement :
 
@@ -384,5 +392,6 @@ Messages d'erreur en français, compréhensibles par un utilisateur final.
 - SQL natif ou requêtes concaténées : utiliser les méthodes du repository (voir « Repositories »).
   Les scripts de migration Flyway (DDL) ne sont pas concernés : c'est le seul endroit où du SQL est écrit.
 - Appeler un repository depuis un contrôleur : toujours passer par le service.
-- Lever une `RuntimeException` brute : utiliser une sous-classe d'`ApplicationException`.
+- Lever une `RuntimeException` brute : utiliser une sous-classe d'`ApplicationException` (sauf dans
+  un convertisseur Spring, voir « Format des réponses et gestion des erreurs »).
 - Exposer une entité JPA dans une réponse : passer par un DTO.

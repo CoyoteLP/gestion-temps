@@ -23,13 +23,6 @@ import jakarta.persistence.QueryHint;
 public interface UtilisateurRepository extends JpaRepository<Utilisateur, Long> {
 
 	/**
-	 * @param actif    état recherché (false : comptes en attente de validation ou désactivés)
-	 * @param pageable page et tri demandés
-	 * @return une page des utilisateurs dans cet état
-	 */
-	Page<Utilisateur> findByActif(boolean actif, Pageable pageable);
-
-	/**
 	 * @param email adresse email
 	 * @return true si un utilisateur possède déjà cet email
 	 */
@@ -83,5 +76,24 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, Long> 
 	@QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = Constantes.DELAI_VERROU_UTILISATEUR_MS))
 	@Query("select u from Utilisateur u where u.id = :id")
 	Optional<Utilisateur> findVerrouilleById(@Param("id") Long id);
+
+	/**
+	 * Recherche filtrée, paginée et triée selon {@code page} (un paramètre null n'est pas filtré). Les
+	 * motifs texte viennent de {@code MotifRecherche.contient} : échappés avec {@code !}.
+	 *
+	 * @param nom   motif du nom ou du prénom
+	 * @param email motif de l'email
+	 * @param actif statut
+	 * @param page  page et tri demandés
+	 * @return la page d'utilisateurs correspondants
+	 */
+	@Query("""
+			select u from Utilisateur u
+			where (:nom is null or u.nom like :nom escape '!' or u.prenom like :nom escape '!')
+			  and (:email is null or u.email like :email escape '!')
+			  and (:actif is null or u.actif = :actif)
+			""")
+	Page<Utilisateur> search(@Param("nom") String nom, @Param("email") String email, @Param("actif") Boolean actif,
+			Pageable page);
 
 }

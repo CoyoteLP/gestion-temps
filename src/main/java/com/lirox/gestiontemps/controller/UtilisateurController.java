@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -19,6 +18,7 @@ import com.lirox.gestiontemps.dto.ApiResponse;
 import com.lirox.gestiontemps.dto.PageResponse;
 import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.ProfilRequest;
+import com.lirox.gestiontemps.dto.RechercheUtilisateursRequest;
 import com.lirox.gestiontemps.dto.UtilisateurRequest;
 import com.lirox.gestiontemps.dto.UtilisateurResponse;
 import com.lirox.gestiontemps.service.UtilisateurService;
@@ -40,17 +40,17 @@ public class UtilisateurController {
 	private final UtilisateurService utilisateurService;
 
 	/**
-	 * {@code GET /api/utilisateurs} : liste des utilisateurs.
+	 * {@code GET /api/utilisateurs?nom=&email=&actif=&tri=&sens=} : liste des utilisateurs.
 	 *
-	 * @param actif      filtre facultatif sur l'état ({@code false} : comptes en attente de
-	 *                   validation ou désactivés)
+	 * @param recherche  filtres ({@code actif=false} : comptes en attente de validation ou
+	 *                   désactivés) et tri (colonnes admises : {@code TriUtilisateur})
 	 * @param pagination page demandée
 	 * @return une page d'utilisateurs
 	 */
 	@GetMapping
-	public ApiResponse<PageResponse<UtilisateurResponse>> findAll(@RequestParam(required = false) Boolean actif,
+	public ApiResponse<PageResponse<UtilisateurResponse>> findAll(@Valid RechercheUtilisateursRequest recherche,
 			@Valid PaginationRequest pagination) {
-		return ApiResponse.success(utilisateurService.findAll(actif, pagination));
+		return ApiResponse.success(utilisateurService.findAll(recherche, pagination));
 	}
 
 	/**

@@ -18,7 +18,6 @@ import { utilisateurCourant } from "@/lib/auth/session"
 import { formaterPeriode } from "@/lib/format"
 import { lireIdentifiant } from "@/lib/identifiant"
 import { LIBELLES_ROLE_PROJET } from "@/lib/membres/schema-membre"
-import { lirePage } from "@/lib/pagination"
 import { supprimerProjetAction } from "@/lib/projets/actions"
 import { lireProjetDeLaPage } from "@/lib/projets/lecture"
 
@@ -58,7 +57,7 @@ async function FicheProjet({ params, searchParams }: Readonly<PageProps<"/projet
 			<AlerteErreur message={projet.message} identifiantCorrelation={projet.identifiantCorrelation} />
 		)
 	}
-	const page = lirePage((await searchParams).page)
+	const parametres = await searchParams
 
 	return (
 		<>
@@ -119,11 +118,11 @@ async function FicheProjet({ params, searchParams }: Readonly<PageProps<"/projet
 				</CardContent>
 			</Card>
 			<Suspense fallback={<Chargement libelle="Chargement des tâches" hauteur="h-48" />}>
-				<TachesProjet projetId={projet.id} page={page} estAdmin={utilisateur.estAdmin} />
+				<TachesProjet projetId={projet.id} parametres={parametres} estAdmin={utilisateur.estAdmin} />
 			</Suspense>
 			{utilisateur.estAdmin && (
 				<Suspense fallback={<Chargement libelle="Chargement des membres" hauteur="h-48" />}>
-					<MembresProjet projetId={projet.id} />
+					<MembresProjet projetId={projet.id} parametres={parametres} />
 				</Suspense>
 			)}
 		</>

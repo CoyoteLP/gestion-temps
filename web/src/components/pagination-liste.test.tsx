@@ -10,26 +10,41 @@ describe("PaginationListe", () => {
 		)
 
 		expect(screen.getByText("50 projets — page 2 sur 3")).toBeInTheDocument()
-		expect(screen.getByRole("link", { name: "Page précédente" })).toHaveAttribute(
-			"href",
-			"/projets?page=1",
-		)
+		// Première page : sans paramètre de page
+		expect(screen.getByRole("link", { name: "Page précédente" })).toHaveAttribute("href", "/projets")
 		expect(screen.getByRole("link", { name: "Page suivante" })).toHaveAttribute("href", "/projets?page=3")
 	})
 
-	it("conserve le filtre de la liste d'une page à l'autre", () => {
+	it("conserve le tri et les filtres de la liste d'une page à l'autre", () => {
 		render(
 			<PaginationListe
 				page={{ page: 1, pages: 2, total: 30 }}
 				chemin="/utilisateurs"
-				parametres={{ statut: "tous" }}
+				parametres={{ actif: "tous", tri: "nom", page: "1" }}
 				libelle="utilisateurs"
 			/>,
 		)
 
 		expect(screen.getByRole("link", { name: "Page suivante" })).toHaveAttribute(
 			"href",
-			"/utilisateurs?statut=tous&page=2",
+			"/utilisateurs?actif=tous&tri=nom&page=2",
+		)
+	})
+
+	it("utilise le préfixe de la liste et garde les paramètres de l'autre liste", () => {
+		render(
+			<PaginationListe
+				page={{ page: 2, pages: 3, total: 50 }}
+				chemin="/projets/3"
+				parametres={{ page: "4", "membres.page": "2", "membres.role": "BACKUP" }}
+				prefixe="membres."
+				libelle="membres"
+			/>,
+		)
+
+		expect(screen.getByRole("link", { name: "Page suivante" })).toHaveAttribute(
+			"href",
+			"/projets/3?page=4&membres.role=BACKUP&membres.page=3",
 		)
 	})
 

@@ -2,14 +2,15 @@ package com.lirox.gestiontemps.service;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.lirox.gestiontemps.common.MotifRecherche;
 import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.domain.Tache;
 import com.lirox.gestiontemps.dto.PageResponse;
 import com.lirox.gestiontemps.dto.PaginationRequest;
+import com.lirox.gestiontemps.dto.RechercheTachesRequest;
 import com.lirox.gestiontemps.dto.TacheRequest;
 import com.lirox.gestiontemps.dto.TacheResponse;
 import com.lirox.gestiontemps.exception.AccesRefuseException;
@@ -38,24 +39,25 @@ public class TacheService {
 	private final AccesProjetService accesProjetService;
 
 	/**
-	 * @param projetId   restreint aux tâches de ce projet ; null = toutes les tâches visibles (celles
-	 *                   des projets dont un collaborateur est membre)
+	 * @param recherche  projet (null = toutes les tâches visibles : celles des projets dont un
+	 *                   collaborateur est membre), filtres (libellé, statut) et tri choisis parmi les
+	 *                   colonnes admises
 	 * @param pagination page demandée
-	 * @return une page de tâches, par identifiant croissant
+	 * @return une page de tâches (identifiant croissant sans tri choisi)
 	 * @throws AccesRefuseException si un collaborateur filtre sur un projet dont il n'est pas membre
 	 */
-	public PageResponse<TacheResponse> findAll(Long projetId, PaginationRequest pagination) {
-		PageRequest page = pagination.versPageRequest(Sort.by("id"));
-		Page<Tache> taches;
-		if (projetId != null) {
-			accesProjetService.verifierAcces(projetId);
-			taches = tacheRepository.findByProjetId(projetId, page);
+	public PageResponse<TacheResponse> findAll(RechercheTachesRequest recherche, PaginationRequest pagination) {
+		PageRequest page = pagination.versPageRequest(recherche.tri(), recherche.sens());
+		Long restreint = null;
+		if (recherche.projetId() != null) {
+			// L'accès au projet vérifié suffit : pas de restriction supplémentaire
+			accesProjetService.verifierAcces(recherche.projetId());
 		}
 		else {
-			Long utilisateurId = accesProjetService.utilisateurRestreint();
-			taches = utilisateurId == null ? tacheRepository.findAll(page)
-					: tacheRepository.findDontMembre(utilisateurId, page);
+			restreint = accesProjetService.utilisateurRestreint();
 		}
+		Page<Tache> taches = tacheRepository.search(recherche.projetId(), MotifRecherche.contient(recherche.libelle()),
+				recherche.actif(), restreint, page);
 		return PageResponse.from(taches, TacheResponse::from);
 	}
 

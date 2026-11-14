@@ -95,19 +95,40 @@ describe("modifierMonProfil", () => {
 })
 
 describe("listerUtilisateurs", () => {
-	it("filtre sur le statut demandé", async () => {
-		await listerUtilisateurs(false, 2)
+	it("transmet les filtres et le tri de la liste", async () => {
+		await listerUtilisateurs({
+			page: 2,
+			tri: "nom",
+			sens: "desc",
+			filtres: { nom: "lea", email: "", actif: "inactif" },
+		})
 
 		expect(apiFetchSimule).toHaveBeenCalledWith("/api/utilisateurs", {
-			parametres: { actif: false, page: 2, taille: 20 },
+			parametres: {
+				page: 2,
+				taille: 20,
+				tri: "nom",
+				sens: "desc",
+				nom: "lea",
+				email: "",
+				actif: false,
+			},
 		})
 	})
 
-	it("liste toutes les fiches sans filtre", async () => {
-		await listerUtilisateurs(undefined, 1)
+	it("liste toutes les fiches avec le statut « tous »", async () => {
+		await listerUtilisateurs({ page: 1, tri: null, sens: "asc", filtres: { actif: "tous" } })
 
 		expect(apiFetchSimule).toHaveBeenCalledWith("/api/utilisateurs", {
-			parametres: { actif: undefined, page: 1, taille: 20 },
+			parametres: {
+				page: 1,
+				taille: 20,
+				tri: undefined,
+				sens: undefined,
+				nom: undefined,
+				email: undefined,
+				actif: undefined,
+			},
 		})
 	})
 })

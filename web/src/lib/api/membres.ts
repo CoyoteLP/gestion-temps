@@ -1,16 +1,35 @@
 import "server-only"
 
 import { TAILLE_PAGE_MAX } from "@/lib/constantes"
+import type { EtatListe } from "@/lib/listes/etat-liste"
 
 import { apiFetch } from "./client"
 import type { MembreProjet, MembreProjetRequest } from "./modeles"
 import { lireToutesLesPages } from "./pages"
+import { parametresTri } from "./parametres-liste"
 import type { PageResponse } from "./types"
 
 const cheminMembres = (projetId: number) => `/api/projets/${projetId}/membres`
 
 /**
- * Tous les membres d'un projet (quelques personnes : la liste n'est pas paginée à l'écran).
+ * @param projetId identifiant du projet
+ * @param etat     page, tri et filtres de la liste (nom, email, rôle)
+ * @returns une page de membres du projet, triés et filtrés par l'API
+ * @throws ApiError 404 si le projet n'existe pas
+ */
+export function listerMembres(projetId: number, etat: EtatListe): Promise<PageResponse<MembreProjet>> {
+	return apiFetch<PageResponse<MembreProjet>>(cheminMembres(projetId), {
+		parametres: {
+			...parametresTri(etat),
+			nom: etat.filtres.nom,
+			email: etat.filtres.email,
+			role: etat.filtres.role,
+		},
+	})
+}
+
+/**
+ * Tous les membres d'un projet, sans filtre : pour savoir qui peut encore y être ajouté.
  *
  * @param projetId identifiant du projet
  * @returns les membres, triés par l'API

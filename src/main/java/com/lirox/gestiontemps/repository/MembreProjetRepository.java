@@ -7,6 +7,8 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.lirox.gestiontemps.domain.MembreProjet;
 import com.lirox.gestiontemps.domain.RoleProjet;
@@ -15,13 +17,6 @@ import com.lirox.gestiontemps.domain.RoleProjet;
  * Accès aux données des membres de projet.
  */
 public interface MembreProjetRepository extends JpaRepository<MembreProjet, Long> {
-
-	/**
-	 * @param projetId identifiant du projet
-	 * @param page     page et tri demandés
-	 * @return la page de membres du projet
-	 */
-	Page<MembreProjet> findByProjetId(Long projetId, Pageable page);
 
 	/**
 	 * @param id       identifiant du membre
@@ -80,5 +75,26 @@ public interface MembreProjetRepository extends JpaRepository<MembreProjet, Long
 	 * @param utilisateurId identifiant de l'utilisateur retiré de tous ses projets
 	 */
 	void deleteByUtilisateurId(Long utilisateurId);
+
+	/**
+	 * Recherche filtrée, paginée et triée selon {@code page} (un paramètre null n'est pas filtré). Les
+	 * motifs texte viennent de {@code MotifRecherche.contient} : échappés avec {@code !}. L'alias {@code m} est repris par le tri par rôle ({@code TriMembre.ROLE}).
+	 *
+	 * @param projetId identifiant du projet
+	 * @param nom      motif du nom ou du prénom de l'utilisateur
+	 * @param email    motif de l'email de l'utilisateur
+	 * @param role     rôle dans le projet
+	 * @param page     page et tri demandés
+	 * @return la page de membres correspondants
+	 */
+	@Query("""
+			select m from MembreProjet m
+			where m.projet.id = :projetId
+			  and (:nom is null or m.utilisateur.nom like :nom escape '!' or m.utilisateur.prenom like :nom escape '!')
+			  and (:email is null or m.utilisateur.email like :email escape '!')
+			  and (:role is null or m.role = :role)
+			""")
+	Page<MembreProjet> search(@Param("projetId") Long projetId, @Param("nom") String nom,
+			@Param("email") String email, @Param("role") RoleProjet role, Pageable page);
 
 }

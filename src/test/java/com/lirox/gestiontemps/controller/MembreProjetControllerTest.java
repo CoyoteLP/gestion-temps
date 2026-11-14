@@ -2,6 +2,7 @@ package com.lirox.gestiontemps.controller;
 
 import static com.lirox.gestiontemps.JetonsDeTest.collaborateur;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -286,6 +287,53 @@ class MembreProjetControllerTest {
 		Utilisateur u = saveUtilisateur(email);
 		u.setSujet("sujet-" + email);
 		return u;
+	}
+
+	// Tri et filtres de la liste (paramètres tri, sens, nom, email, role)
+
+	@Test
+	void trieLesMembresParRoleSelonLeurImportance() throws Exception {
+		save(projet, saveNomme("contributeur@lirox.com", "Cadet", "Léo"), RoleProjet.CONTRIBUTEUR);
+		save(projet, saveNomme("suppleant@lirox.com", "Bernard", "Max"), RoleProjet.BACKUP);
+		save(projet, saveNomme("responsable@lirox.com", "Arnaud", "Ève"), RoleProjet.MANAGER);
+
+		mockMvc.perform(get("/api/projets/{projetId}/membres", projet.getId()).param("tri", "role"))
+				.andExpect(jsonPath("$.data.contenu[*].role").value(contains("MANAGER", "BACKUP", "CONTRIBUTEUR")));
+		mockMvc.perform(get("/api/projets/{projetId}/membres", projet.getId()).param("tri", "role")
+				.param("sens", "desc"))
+				.andExpect(jsonPath("$.data.contenu[*].role").value(contains("CONTRIBUTEUR", "BACKUP", "MANAGER")));
+		mockMvc.perform(get("/api/projets/{projetId}/membres", projet.getId()).param("tri", "nom"))
+				.andExpect(jsonPath("$.data.contenu[*].role").value(contains("MANAGER", "BACKUP", "CONTRIBUTEUR")));
+	}
+
+	@Test
+	void filtreLesMembresParNomEmailEtRole() throws Exception {
+		save(projet, saveNomme("leo@lirox.com", "Cadet", "Léo"), RoleProjet.CONTRIBUTEUR);
+		save(projet, saveNomme("max@lirox.com", "Bernard", "Max"), RoleProjet.BACKUP);
+		save(saveProjet("PRJ-02"), saveNomme("leon@lirox.com", "Autre", "Léon"), RoleProjet.MANAGER);
+
+		mockMvc.perform(get("/api/projets/{projetId}/membres", projet.getId()).param("nom", "leo"))
+				.andExpect(jsonPath("$.data.total").value(1))
+				.andExpect(jsonPath("$.data.contenu[0].role").value("CONTRIBUTEUR"));
+		mockMvc.perform(get("/api/projets/{projetId}/membres", projet.getId()).param("email", "MAX"))
+				.andExpect(jsonPath("$.data.contenu[*].role").value(contains("BACKUP")));
+		mockMvc.perform(get("/api/projets/{projetId}/membres", projet.getId()).param("role", "BACKUP"))
+				.andExpect(jsonPath("$.data.contenu[*].role").value(contains("BACKUP")));
+	}
+
+	@Test
+	void refuseUnRoleInconnuEnListantLesRolesAdmis() throws Exception {
+		mockMvc.perform(get("/api/projets/{projetId}/membres", projet.getId()).param("role", "ADMIN"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value(containsString("MANAGER, BACKUP, CONTRIBUTEUR")));
+	}
+
+	private Utilisateur saveNomme(String email, String nom, String prenom) {
+		Utilisateur u = new Utilisateur();
+		u.setEmail(email);
+		u.setNom(nom);
+		u.setPrenom(prenom);
+		return utilisateurRepository.save(u);
 	}
 
 }

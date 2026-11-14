@@ -2,21 +2,29 @@ import "server-only"
 
 import { cache } from "react"
 
-import { TAILLE_PAGE } from "@/lib/constantes"
+import { type EtatListe, versActif } from "@/lib/listes/etat-liste"
 
 import { apiFetch } from "./client"
 import type { Projet, ProjetRequest } from "./modeles"
+import { parametresTri } from "./parametres-liste"
 import type { PageResponse } from "./types"
 
 const CHEMIN_PROJETS = "/api/projets"
 
 /**
- * @param page numéro de page, à partir de 1
- * @returns une page de projets, triés par l'API
+ * @param etat page, tri et filtres de la liste (code, nom, statut)
+ * @returns une page de projets, triés et filtrés par l'API
  * @throws ApiError si l'API refuse ou est injoignable
  */
-export function listerProjets(page: number): Promise<PageResponse<Projet>> {
-	return apiFetch<PageResponse<Projet>>(CHEMIN_PROJETS, { parametres: { page, taille: TAILLE_PAGE } })
+export function listerProjets(etat: EtatListe): Promise<PageResponse<Projet>> {
+	return apiFetch<PageResponse<Projet>>(CHEMIN_PROJETS, {
+		parametres: {
+			...parametresTri(etat),
+			code: etat.filtres.code,
+			nom: etat.filtres.nom,
+			actif: versActif(etat.filtres.actif),
+		},
+	})
 }
 
 /**

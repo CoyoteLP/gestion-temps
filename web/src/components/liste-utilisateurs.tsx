@@ -1,34 +1,32 @@
 import { UnlinkIcon, UserXIcon } from "lucide-react"
-import Link from "next/link"
 
 import { AlerteErreur } from "@/components/alerte-erreur"
 import { BoutonActivation } from "@/components/bouton-activation"
 import { DialogueConfirmation } from "@/components/dialogue-confirmation"
-import { PaginationListe } from "@/components/pagination-liste"
+import { TableauListe } from "@/components/tableau-liste"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { TableCell, TableRow } from "@/components/ui/table"
 import { ApiError, valeurOuErreurApi } from "@/lib/api/erreurs"
 import { listerUtilisateurs } from "@/lib/api/utilisateurs"
 import { formaterDate, nomComplet } from "@/lib/format"
+import { LISTE_UTILISATEURS } from "@/lib/listes/definitions"
+import { lireEtatListe, type ParametresUrl } from "@/lib/listes/etat-liste"
 import { changerActivationAction, reinitialiserRattachementAction } from "@/lib/utilisateurs/actions"
-import { FILTRES_UTILISATEURS, type FiltreUtilisateurs } from "@/lib/utilisateurs/filtre"
-
-const CHEMIN = "/utilisateurs"
 
 type Props = Readonly<{
-	filtre: FiltreUtilisateurs
-	/** Numéro de page, à partir de 1. */
-	page: number
+	/** Paramètres de l'URL : page, tri et filtres (statut « en attente » par défaut). */
+	parametres: ParametresUrl
 }>
 
 /**
- * Comptes utilisateurs filtrés par statut, avec leur activation ou leur désactivation
- * (administrateur). Lit l'API : à placer dans un `<Suspense>`.
+ * Comptes utilisateurs, triables et filtrables (en attente de validation par défaut), avec leur
+ * activation, leur désactivation et la réinitialisation de leur rattachement (administrateur). Lit
+ * l'API : à placer dans un `<Suspense>`.
  */
-export async function ListeUtilisateurs({ filtre, page }: Props) {
-	const utilisateurs = await valeurOuErreurApi(listerUtilisateurs(filtre.actif, page))
+export async function ListeUtilisateurs({ parametres }: Props) {
+	const etat = lireEtatListe(LISTE_UTILISATEURS, parametres)
+	const utilisateurs = await valeurOuErreurApi(listerUtilisateurs(etat))
 	if (utilisateurs instanceof ApiError) {
 		return (
 			<AlerteErreur
@@ -37,139 +35,91 @@ export async function ListeUtilisateurs({ filtre, page }: Props) {
 			/>
 		)
 	}
+
 	return (
-		<>
-			<nav aria-label="Filtrer par statut" className="flex gap-1">
-				{FILTRES_UTILISATEURS.map((choix) => {
-					const courant = choix.valeur === filtre.valeur
-					return (
-						<Button
-							key={choix.valeur}
-							variant={courant ? "secondary" : "ghost"}
-							size="sm"
-							asChild
-						>
-							<Link
-								href={`${CHEMIN}?statut=${choix.valeur}`}
-								aria-current={courant ? "page" : undefined}
-							>
-								{choix.libelle}
-							</Link>
-						</Button>
-					)
-				})}
-			</nav>
-			<Card className="py-0">
-				<CardContent className="px-0">
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead className="pl-4">Nom</TableHead>
-								<TableHead className="hidden md:table-cell">Email</TableHead>
-								<TableHead className="hidden lg:table-cell">Inscription</TableHead>
-								<TableHead>Statut</TableHead>
-								<TableHead className="pr-4 text-right">
-									<span className="sr-only">Actions</span>
-								</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{utilisateurs.contenu.length === 0 ? (
-								<TableRow>
-									<TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-										{filtre.actif === false
-											? "Aucun compte en attente."
-											: "Aucun utilisateur."}
-									</TableCell>
-								</TableRow>
+		<TableauListe
+			definition={LISTE_UTILISATEURS}
+			etat={etat}
+			chemin="/utilisateurs"
+			parametres={parametres}
+			page={utilisateurs}
+			libelles={{ un: "utilisateur", plusieurs: "utilisateurs" }}
+			messages={{
+				vide: etat.filtres.actif === "inactif" ? "Aucun compte en attente." : "Aucun utilisateur.",
+				aucunResultat: "Aucun utilisateur ne correspond aux filtres.",
+			}}
+		>
+			{utilisateurs.contenu.map((utilisateur) => {
+				const nom = nomComplet(utilisateur)
+				return (
+					<TableRow key={utilisateur.id}>
+						<TableCell className="pl-4 font-medium">{nom}</TableCell>
+						<TableCell className="hidden text-muted-foreground md:table-cell">
+							{utilisateur.email}
+						</TableCell>
+						<TableCell className="hidden text-muted-foreground lg:table-cell">
+							{utilisateur.audit ? formaterDate(utilisateur.audit.creeLe) : null}
+						</TableCell>
+						<TableCell>
+							{utilisateur.actif ? (
+								<Badge variant="secondary">Actif</Badge>
 							) : (
-								utilisateurs.contenu.map((utilisateur) => {
-									const nom = nomComplet(utilisateur)
-									return (
-										<TableRow key={utilisateur.id}>
-											<TableCell className="pl-4 font-medium">{nom}</TableCell>
-											<TableCell className="hidden text-muted-foreground md:table-cell">
-												{utilisateur.email}
-											</TableCell>
-											<TableCell className="hidden text-muted-foreground lg:table-cell">
-												{utilisateur.audit
-													? formaterDate(utilisateur.audit.creeLe)
-													: null}
-											</TableCell>
-											<TableCell>
-												{utilisateur.actif ? (
-													<Badge variant="secondary">Actif</Badge>
-												) : (
-													<Badge variant="outline">Inactif</Badge>
-												)}
-											</TableCell>
-											<TableCell className="space-x-1 pr-4 text-right whitespace-nowrap">
-												{utilisateur.rattache && (
-													<DialogueConfirmation
-														titre="Réinitialiser le rattachement ?"
-														description={`Le compte de connexion de ${nom} sera détaché de sa fiche ; elle sera reprise par le prochain compte qui se connectera avec l'email ${utilisateur.email}, vérifié par le service de connexion. À utiliser quand son compte a été recréé.`}
-														libelleConfirmation="Réinitialiser"
-														messageSucces={`Le rattachement du compte de ${nom} est réinitialisé.`}
-														action={reinitialiserRattachementAction.bind(
-															null,
-															utilisateur.id,
-														)}
-														declencheur={
-															<Button
-																variant="ghost"
-																size="icon-sm"
-																aria-label={`Réinitialiser le rattachement du compte de ${nom}`}
-																title="Réinitialiser le rattachement du compte"
-															>
-																<UnlinkIcon />
-															</Button>
-														}
-													/>
-												)}
-												{utilisateur.actif ? (
-													<DialogueConfirmation
-														titre="Désactiver ce compte ?"
-														description={`${nom} n'aura plus accès aux projets ni aux saisies, jusqu'à une nouvelle activation. Ses saisies de temps sont conservées.`}
-														libelleConfirmation="Désactiver"
-														messageSucces={`Le compte de ${nom} est désactivé.`}
-														action={changerActivationAction.bind(
-															null,
-															utilisateur.id,
-															false,
-															utilisateur.version,
-														)}
-														declencheur={
-															<Button variant="outline" size="sm">
-																<UserXIcon /> Désactiver
-															</Button>
-														}
-													/>
-												) : (
-													<BoutonActivation
-														nom={nom}
-														action={changerActivationAction.bind(
-															null,
-															utilisateur.id,
-															true,
-															utilisateur.version,
-														)}
-													/>
-												)}
-											</TableCell>
-										</TableRow>
-									)
-								})
+								<Badge variant="outline">Inactif</Badge>
 							)}
-						</TableBody>
-					</Table>
-				</CardContent>
-			</Card>
-			<PaginationListe
-				page={utilisateurs}
-				chemin={CHEMIN}
-				parametres={{ statut: filtre.valeur }}
-				libelle={utilisateurs.total > 1 ? "utilisateurs" : "utilisateur"}
-			/>
-		</>
+						</TableCell>
+						<TableCell className="space-x-1 pr-4 text-right whitespace-nowrap">
+							{utilisateur.rattache && (
+								<DialogueConfirmation
+									titre="Réinitialiser le rattachement ?"
+									description={`Le compte de connexion de ${nom} sera détaché de sa fiche ; elle sera reprise par le prochain compte qui se connectera avec l'email ${utilisateur.email}, vérifié par le service de connexion. À utiliser quand son compte a été recréé.`}
+									libelleConfirmation="Réinitialiser"
+									messageSucces={`Le rattachement du compte de ${nom} est réinitialisé.`}
+									action={reinitialiserRattachementAction.bind(null, utilisateur.id)}
+									declencheur={
+										<Button
+											variant="ghost"
+											size="icon-sm"
+											aria-label={`Réinitialiser le rattachement du compte de ${nom}`}
+											title="Réinitialiser le rattachement du compte"
+										>
+											<UnlinkIcon />
+										</Button>
+									}
+								/>
+							)}
+							{utilisateur.actif ? (
+								<DialogueConfirmation
+									titre="Désactiver ce compte ?"
+									description={`${nom} n'aura plus accès aux projets ni aux saisies, jusqu'à une nouvelle activation. Ses saisies de temps sont conservées.`}
+									libelleConfirmation="Désactiver"
+									messageSucces={`Le compte de ${nom} est désactivé.`}
+									action={changerActivationAction.bind(
+										null,
+										utilisateur.id,
+										false,
+										utilisateur.version,
+									)}
+									declencheur={
+										<Button variant="outline" size="sm">
+											<UserXIcon /> Désactiver
+										</Button>
+									}
+								/>
+							) : (
+								<BoutonActivation
+									nom={nom}
+									action={changerActivationAction.bind(
+										null,
+										utilisateur.id,
+										true,
+										utilisateur.version,
+									)}
+								/>
+							)}
+						</TableCell>
+					</TableRow>
+				)
+			})}
+		</TableauListe>
 	)
 }
