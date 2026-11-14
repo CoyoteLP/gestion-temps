@@ -1,11 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import type { EtatListe } from "@/lib/listes/etat-liste"
+
 import { apiFetch } from "./client"
 import { creerProjet, lireProjet, listerProjets, modifierProjet, supprimerProjet } from "./projets"
 
 vi.mock("./client", () => ({ apiFetch: vi.fn() }))
 
 const apiFetchSimule = vi.mocked(apiFetch)
+
+/** État d'une liste sans tri ni filtre, à la page donnée. */
+const etat = (page = 1, autres: Partial<EtatListe> = {}): EtatListe => ({
+	page,
+	tri: null,
+	sens: "asc",
+	filtres: {},
+	...autres,
+})
 
 const requete = { code: "APP", nom: "Application", actif: true }
 
@@ -15,10 +26,30 @@ beforeEach(() => {
 })
 
 describe("projets", () => {
-	it("liste une page de projets", async () => {
-		await listerProjets(2)
+	it("liste une page de projets, sans tri ni filtre", async () => {
+		await listerProjets(etat(2))
 
-		expect(apiFetchSimule).toHaveBeenCalledWith("/api/projets", { parametres: { page: 2, taille: 20 } })
+		expect(apiFetchSimule).toHaveBeenCalledWith("/api/projets", {
+			parametres: {
+				page: 2,
+				taille: 20,
+				tri: undefined,
+				sens: undefined,
+				code: undefined,
+				nom: undefined,
+				actif: undefined,
+			},
+		})
+	})
+
+	it("transmet le tri, son sens et les filtres de la liste", async () => {
+		await listerProjets(
+			etat(1, { tri: "nom", sens: "desc", filtres: { code: "APP", nom: "", actif: "inactif" } }),
+		)
+
+		expect(apiFetchSimule).toHaveBeenCalledWith("/api/projets", {
+			parametres: { page: 1, taille: 20, tri: "nom", sens: "desc", code: "APP", nom: "", actif: false },
+		})
 	})
 
 	it("lit un projet par son identifiant", async () => {

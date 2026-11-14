@@ -9,7 +9,6 @@ import { ReserveAdmin } from "@/components/reserve-admin"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { utilisateurCourant } from "@/lib/auth/session"
-import { lirePage } from "@/lib/pagination"
 
 export const metadata: Metadata = { title: "Projets" }
 
@@ -41,7 +40,7 @@ export default function PageProjets({ searchParams }: PageProps<"/projets">) {
 /** Liste de la page demandée, avec l'accès à la modification pour l'administrateur. */
 async function Projets({ searchParams }: Readonly<Pick<PageProps<"/projets">, "searchParams">>) {
 	const [parametres, utilisateur] = await Promise.all([searchParams, utilisateurCourant()])
-	return <ListeProjets page={lirePage(parametres.page)} estAdmin={utilisateur.estAdmin} />
+	return <ListeProjets parametres={parametres} estAdmin={utilisateur.estAdmin} />
 }
 
 function ChargementProjets() {

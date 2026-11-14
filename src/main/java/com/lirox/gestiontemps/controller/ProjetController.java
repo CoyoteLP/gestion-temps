@@ -19,6 +19,7 @@ import com.lirox.gestiontemps.dto.PageResponse;
 import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.ProjetRequest;
 import com.lirox.gestiontemps.dto.ProjetResponse;
+import com.lirox.gestiontemps.dto.RechercheProjetsRequest;
 import com.lirox.gestiontemps.service.ProjetService;
 import com.lirox.gestiontemps.validation.Modification;
 
@@ -37,14 +38,16 @@ public class ProjetController {
 	private final ProjetService projetService;
 
 	/**
-	 * {@code GET /api/projets?page=&taille=} : liste paginée des projets.
+	 * {@code GET /api/projets?code=&nom=&actif=&tri=&sens=&page=&taille=} : liste paginée des projets.
 	 *
+	 * @param recherche  filtres et tri (colonnes admises : {@code TriProjet})
 	 * @param pagination page demandée (à partir de 1) et taille
 	 * @return une page de projets
 	 */
 	@GetMapping
-	public ApiResponse<PageResponse<ProjetResponse>> findAll(@Valid PaginationRequest pagination) {
-		return ApiResponse.success(projetService.findAll(pagination));
+	public ApiResponse<PageResponse<ProjetResponse>> findAll(@Valid RechercheProjetsRequest recherche,
+			@Valid PaginationRequest pagination) {
+		return ApiResponse.success(projetService.findAll(recherche, pagination));
 	}
 
 	/**

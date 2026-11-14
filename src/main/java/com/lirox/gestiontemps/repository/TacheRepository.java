@@ -15,28 +15,30 @@ public interface TacheRepository extends JpaRepository<Tache, Long> {
 
 	/**
 	 * @param projetId identifiant du projet
-	 * @param page     page et tri demandés
-	 * @return la page de tâches du projet
-	 */
-	Page<Tache> findByProjetId(Long projetId, Pageable page);
-
-	/**
-	 * @param projetId identifiant du projet
 	 * @return true si le projet possède au moins une tâche
 	 */
 	boolean existsByProjetId(Long projetId);
 
 	/**
-	 * Tâches visibles par un collaborateur : celles des projets dont il est membre.
+	 * Recherche filtrée, paginée et triée selon {@code page} (un paramètre null n'est pas filtré). Les
+	 * motifs texte viennent de {@code MotifRecherche.contient} : échappés avec {@code !}.
 	 *
-	 * @param utilisateurId identifiant de l'utilisateur
+	 * @param projetId      tâches de ce projet
+	 * @param libelle       motif du libellé
+	 * @param actif         statut
+	 * @param utilisateurId restreint aux projets dont cet utilisateur est membre (null : tous)
 	 * @param page          page et tri demandés
-	 * @return la page des tâches des projets dont l'utilisateur est membre
+	 * @return la page de tâches correspondantes
 	 */
 	@Query("""
 			select t from Tache t
-			where exists (select m from MembreProjet m where m.projet = t.projet and m.utilisateur.id = :utilisateurId)
+			where (:projetId is null or t.projet.id = :projetId)
+			  and (:libelle is null or t.libelle like :libelle escape '!')
+			  and (:actif is null or t.actif = :actif)
+			  and (:utilisateurId is null or exists (
+			      select m from MembreProjet m where m.projet = t.projet and m.utilisateur.id = :utilisateurId))
 			""")
-	Page<Tache> findDontMembre(@Param("utilisateurId") Long utilisateurId, Pageable page);
+	Page<Tache> search(@Param("projetId") Long projetId, @Param("libelle") String libelle,
+			@Param("actif") Boolean actif, @Param("utilisateurId") Long utilisateurId, Pageable page);
 
 }

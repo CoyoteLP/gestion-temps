@@ -12,6 +12,12 @@ export const MARGE_RENOUVELLEMENT_JETON_SECONDES = 60
 /** Nombre d'éléments par page des listes (l'API accepte 100 au plus). */
 export const TAILLE_PAGE = 20
 
+/** Longueur maximale d'un filtre texte de liste (l'API refuse au-delà). */
+export const LONGUEUR_MAX_FILTRE = 100
+
+/** Pause de frappe après laquelle un filtre texte de liste est appliqué, en millisecondes. */
+export const DELAI_FILTRE_MS = 300
+
 /** Taille de page maximale acceptée par l'API, pour lire une liste en entier en peu d'appels. */
 export const TAILLE_PAGE_MAX = 100
 

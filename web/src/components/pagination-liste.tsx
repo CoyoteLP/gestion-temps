@@ -6,21 +6,24 @@ import {
 	PaginationPrevious,
 } from "@/components/ui/pagination"
 import type { PageResponse } from "@/lib/api/types"
+import { lienListe, type ParametresUrl } from "@/lib/listes/etat-liste"
 
 type Props = {
 	page: Pick<PageResponse<unknown>, "page" | "pages" | "total">
-	/** Chemin de la liste ; le numéro de page est ajouté en paramètre `page`. */
+	/** Chemin de la liste ; le numéro de page est ajouté en paramètre `page` (avec le préfixe). */
 	chemin: string
-	/** Autres paramètres de l'URL à conserver d'une page à l'autre (filtre). */
-	parametres?: Record<string, string>
+	/** Paramètres actuels de l'URL, conservés d'une page à l'autre (tri, filtres, autre liste). */
+	parametres?: ParametresUrl
+	/** Préfixe des paramètres de la liste, si la page en affiche plusieurs. */
+	prefixe?: string
 	/** Libellé des éléments au pluriel (« projets »). */
 	libelle: string
 }
 
 /** Pied de liste paginée : total, page courante, liens précédente et suivante. */
-export function PaginationListe({ page, chemin, libelle, parametres = {} }: Props) {
+export function PaginationListe({ page, chemin, libelle, parametres = {}, prefixe = "" }: Props) {
 	const lien = (numero: number) =>
-		`${chemin}?${new URLSearchParams({ ...parametres, page: String(numero) }).toString()}`
+		lienListe(chemin, parametres, prefixe, { page: numero > 1 ? String(numero) : null })
 
 	return (
 		<div className="flex flex-col items-center justify-between gap-2 sm:flex-row">

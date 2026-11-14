@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { apiFetch } from "./client"
-import { ajouterMembre, listerTousLesMembres, modifierMembre, retirerMembre } from "./membres"
+import { ajouterMembre, listerMembres, listerTousLesMembres, modifierMembre, retirerMembre } from "./membres"
 
 vi.mock("./client", () => ({ apiFetch: vi.fn() }))
 
@@ -23,6 +23,27 @@ describe("membres", () => {
 		})
 		expect(apiFetchSimule).toHaveBeenNthCalledWith(2, "/api/projets/3/membres", {
 			parametres: { page: 2, taille: 100 },
+		})
+	})
+
+	it("lit une page de membres triée et filtrée", async () => {
+		await listerMembres(3, {
+			page: 2,
+			tri: "role",
+			sens: "asc",
+			filtres: { nom: "lea", email: "", role: "BACKUP" },
+		})
+
+		expect(apiFetchSimule).toHaveBeenCalledWith("/api/projets/3/membres", {
+			parametres: {
+				page: 2,
+				taille: 20,
+				tri: "role",
+				sens: "asc",
+				nom: "lea",
+				email: "",
+				role: "BACKUP",
+			},
 		})
 	})
 

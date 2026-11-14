@@ -2,6 +2,7 @@ package com.lirox.gestiontemps.controller;
 
 import static com.lirox.gestiontemps.JetonsDeTest.collaborateur;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -298,6 +299,34 @@ class TacheControllerTest {
 		membre.setRole(role);
 		membreProjetRepository.save(membre);
 		return u;
+	}
+
+	// Tri et filtres de la liste (paramètres tri, sens, libelle, actif)
+
+	@Test
+	void trieEtFiltreLesTachesDUnProjet() throws Exception {
+		save(projet, "Recette");
+		save(projet, "analyse");
+		Tache developpement = save(projet, "Développement");
+		developpement.setActif(false);
+		save(saveProjet("PRJ-02"), "Autre projet");
+
+		mockMvc.perform(get("/api/taches").param("projetId", projet.getId().toString()).param("tri", "libelle"))
+				.andExpect(jsonPath("$.data.contenu[*].libelle").value(contains("analyse", "Développement", "Recette")));
+		mockMvc.perform(get("/api/taches").param("projetId", projet.getId().toString()).param("tri", "libelle")
+				.param("sens", "desc"))
+				.andExpect(jsonPath("$.data.contenu[*].libelle").value(contains("Recette", "Développement", "analyse")));
+		mockMvc.perform(get("/api/taches").param("projetId", projet.getId().toString()).param("libelle", "DEVEL"))
+				.andExpect(jsonPath("$.data.contenu[*].libelle").value(contains("Développement")));
+		mockMvc.perform(get("/api/taches").param("projetId", projet.getId().toString()).param("actif", "false"))
+				.andExpect(jsonPath("$.data.contenu[*].libelle").value(contains("Développement")));
+	}
+
+	@Test
+	void refuseUneColonneDeTriDesTachesInconnue() throws Exception {
+		mockMvc.perform(get("/api/taches").param("tri", "description"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value(containsString("libelle, actif")));
 	}
 
 }

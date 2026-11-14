@@ -40,14 +40,19 @@ beforeEach(() => {
 })
 
 async function afficher(estAdmin: boolean) {
-	render(await TachesProjet({ projetId: 3, page: 2, estAdmin }))
+	render(await TachesProjet({ projetId: 3, parametres: { page: "2" }, estAdmin }))
 }
 
 describe("TachesProjet", () => {
 	it("liste les tâches du projet à la page demandée", async () => {
 		await afficher(false)
 
-		expect(listerSimule).toHaveBeenCalledWith(3, 2)
+		expect(listerSimule).toHaveBeenCalledWith(3, {
+			page: 2,
+			tri: null,
+			sens: "asc",
+			filtres: { libelle: "", actif: "" },
+		})
 		expect(screen.getByRole("cell", { name: "Recette" })).toBeInTheDocument()
 		expect(screen.getByText("Inactive")).toBeInTheDocument()
 	})
@@ -99,7 +104,9 @@ describe("TachesProjet", () => {
 	it("ne les propose pas aux autres utilisateurs", async () => {
 		await afficher(false)
 
-		expect(screen.queryByRole("button")).not.toBeInTheDocument()
+		expect(screen.queryByRole("button", { name: /Nouvelle tâche/ })).not.toBeInTheDocument()
+		expect(screen.queryByRole("button", { name: /Modifier la tâche/ })).not.toBeInTheDocument()
+		expect(screen.queryByRole("button", { name: /Supprimer la tâche/ })).not.toBeInTheDocument()
 	})
 
 	it("affiche une liste vide", async () => {

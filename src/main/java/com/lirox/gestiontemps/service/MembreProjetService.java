@@ -1,15 +1,17 @@
 package com.lirox.gestiontemps.service;
 
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.lirox.gestiontemps.common.MotifRecherche;
 import com.lirox.gestiontemps.domain.MembreProjet;
 import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.dto.MembreProjetRequest;
 import com.lirox.gestiontemps.dto.MembreProjetResponse;
 import com.lirox.gestiontemps.dto.PageResponse;
 import com.lirox.gestiontemps.dto.PaginationRequest;
+import com.lirox.gestiontemps.dto.RechercheMembresRequest;
 import com.lirox.gestiontemps.exception.AccesRefuseException;
 import com.lirox.gestiontemps.exception.DuplicateResourceException;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
@@ -36,16 +38,19 @@ public class MembreProjetService {
 
 	/**
 	 * @param projetId   identifiant du projet
+	 * @param recherche  filtres (nom ou prénom, email, rôle) et tri choisis parmi les colonnes admises
 	 * @param pagination page demandée
-	 * @return une page de membres du projet, par identifiant croissant
+	 * @return une page de membres du projet (identifiant croissant sans tri choisi)
 	 * @throws ResourceNotFoundException si le projet n'existe pas
 	 * @throws AccesRefuseException      si l'appelant n'est ni administrateur ni membre du projet
 	 */
-	public PageResponse<MembreProjetResponse> findAll(Long projetId, PaginationRequest pagination) {
+	public PageResponse<MembreProjetResponse> findAll(Long projetId, RechercheMembresRequest recherche,
+			PaginationRequest pagination) {
 		projetService.getProjet(projetId);
 		accesProjetService.verifierAcces(projetId);
-		return PageResponse.from(membreProjetRepository.findByProjetId(projetId, pagination.versPageRequest(Sort.by("id"))),
-				MembreProjetResponse::from);
+		PageRequest page = pagination.versPageRequest(recherche.tri(), recherche.sens());
+		return PageResponse.from(membreProjetRepository.search(projetId, MotifRecherche.contient(recherche.nom()),
+				MotifRecherche.contient(recherche.email()), recherche.role(), page), MembreProjetResponse::from);
 	}
 
 	/**

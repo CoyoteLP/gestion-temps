@@ -6,14 +6,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.lirox.gestiontemps.common.MotifRecherche;
 import com.lirox.gestiontemps.domain.Utilisateur;
 import com.lirox.gestiontemps.dto.PageResponse;
 import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.ProfilRequest;
+import com.lirox.gestiontemps.dto.RechercheUtilisateursRequest;
 import com.lirox.gestiontemps.dto.UtilisateurRequest;
 import com.lirox.gestiontemps.dto.UtilisateurResponse;
 import com.lirox.gestiontemps.exception.BusinessRuleException;
@@ -48,14 +49,16 @@ public class UtilisateurService {
 	private final Validator validator;
 
 	/**
-	 * @param actif      filtre facultatif sur l'état (false : comptes en attente ou désactivés)
+	 * @param recherche  filtres (nom ou prénom, email, statut : {@code false} = comptes en attente ou
+	 *                   désactivés) et tri choisis parmi les colonnes admises
 	 * @param pagination page demandée
-	 * @return une page d'utilisateurs, par identifiant croissant
+	 * @return une page d'utilisateurs (identifiant croissant sans tri choisi)
 	 */
-	public PageResponse<UtilisateurResponse> findAll(Boolean actif, PaginationRequest pagination) {
-		PageRequest page = pagination.versPageRequest(Sort.by("id"));
-		Page<Utilisateur> utilisateurs = actif == null ? utilisateurRepository.findAll(page)
-				: utilisateurRepository.findByActif(actif, page);
+	public PageResponse<UtilisateurResponse> findAll(RechercheUtilisateursRequest recherche,
+			PaginationRequest pagination) {
+		PageRequest page = pagination.versPageRequest(recherche.tri(), recherche.sens());
+		Page<Utilisateur> utilisateurs = utilisateurRepository.search(MotifRecherche.contient(recherche.nom()),
+				MotifRecherche.contient(recherche.email()), recherche.actif(), page);
 		return PageResponse.from(utilisateurs, UtilisateurResponse::from);
 	}
 

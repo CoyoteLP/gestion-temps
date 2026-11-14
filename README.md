@@ -81,13 +81,21 @@ Le détail des conventions est dans [CLAUDE.md](CLAUDE.md#git).
 
 Les ressources `utilisateurs`, `taches` et `saisies-temps` exposent les mêmes opérations CRUD :
 
-| Ressource                | Filtres (GET liste)                          |
-|--------------------------|----------------------------------------------|
-| /api/utilisateurs        | `actif` (`false` : comptes à valider) ; administrateur seulement |
-| /api/taches              | `projetId`                                   |
-| /api/saisies-temps       | `utilisateurId`, `projetId`, `tacheId`, `du`, `au` (dates, voir ci-dessous) |
-| /api/projets/{projetId}/membres | –                                     |
-| /api/clotures            | `projetId`, `mois` (AAAA-MM)                 |
+| Ressource                | Filtres (GET liste)                          | Tri (`tri`)                  |
+|--------------------------|----------------------------------------------|------------------------------|
+| /api/projets             | `code`, `nom`, `actif`                       | `code`, `nom`, `dateDebut`, `actif` |
+| /api/utilisateurs        | `nom` (nom ou prénom), `email`, `actif` (`false` : comptes à valider) ; administrateur seulement | `nom` (puis prénom), `email`, `creeLe`, `actif` |
+| /api/taches              | `projetId`, `libelle`, `actif`               | `libelle`, `actif`           |
+| /api/saisies-temps       | `utilisateurId`, `projetId`, `tacheId`, `du`, `au` (dates, voir ci-dessous) | – |
+| /api/projets/{projetId}/membres | `nom` (nom ou prénom), `email`, `role` | `nom` (puis prénom), `email`, `role` (responsable, suppléant, contributeur) |
+| /api/clotures            | `projetId`, `mois` (AAAA-MM)                 | –                            |
+
+Filtres texte : éléments qui **contiennent** la saisie, sans tenir compte de la casse ni des accents
+(`%` et `_` sont cherchés tels quels), 100 caractères au plus (150 pour un email). Tri : `tri` parmi
+les colonnes de la liste, `sens=asc` (par défaut) ou `desc` ; une autre valeur renvoie 400 avec les
+valeurs admises. Sans `tri`, l'ordre est celui des identifiants ; avec, l'identifiant départage les
+égalités, et un projet sans date de début vient en dernier. Exemple :
+`GET /api/projets?nom=application&actif=true&tri=nom&sens=desc&page=1`.
 
 Toutes les listes sont **paginées** : paramètres `page` (à partir de 1, 1 par défaut) et `taille`
 (20 par défaut, ramenée à 100 au-delà) ; `data` contient alors la page :

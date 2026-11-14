@@ -435,6 +435,15 @@ export interface components {
             data?: components["schemas"]["ClotureResponse"][];
             message?: string;
         };
+        RechercheUtilisateursRequest: {
+            nom?: string;
+            email?: string;
+            actif?: boolean;
+            /** @enum {string} */
+            tri?: "nom" | "email" | "creeLe" | "actif";
+            /** @enum {string} */
+            sens?: "asc" | "desc";
+        };
         PaginationRequest: {
             /** Format: int32 */
             page?: number;
@@ -456,6 +465,16 @@ export interface components {
             total?: number;
             /** Format: int32 */
             pages?: number;
+        };
+        RechercheTachesRequest: {
+            /** Format: int64 */
+            projetId?: number;
+            libelle?: string;
+            actif?: boolean;
+            /** @enum {string} */
+            tri?: "libelle" | "actif";
+            /** @enum {string} */
+            sens?: "asc" | "desc";
         };
         ApiResponsePageResponseTacheResponse: {
             status?: string;
@@ -484,9 +503,9 @@ export interface components {
             du?: string;
             /** Format: date */
             au?: string;
-            periodeOrdonnee?: boolean;
-            periodeComplete?: boolean;
             periodeLimitee?: boolean;
+            periodeComplete?: boolean;
+            periodeOrdonnee?: boolean;
         };
         ApiResponsePageResponseSaisieTempsResponse: {
             status?: string;
@@ -504,6 +523,15 @@ export interface components {
             /** Format: int32 */
             pages?: number;
         };
+        RechercheProjetsRequest: {
+            code?: string;
+            nom?: string;
+            actif?: boolean;
+            /** @enum {string} */
+            tri?: "code" | "nom" | "dateDebut" | "actif";
+            /** @enum {string} */
+            sens?: "asc" | "desc";
+        };
         ApiResponsePageResponseProjetResponse: {
             status?: string;
             data?: components["schemas"]["PageResponseProjetResponse"];
@@ -519,6 +547,16 @@ export interface components {
             total?: number;
             /** Format: int32 */
             pages?: number;
+        };
+        RechercheMembresRequest: {
+            nom?: string;
+            email?: string;
+            /** @enum {string} */
+            role?: "MANAGER" | "BACKUP" | "CONTRIBUTEUR";
+            /** @enum {string} */
+            tri?: "nom" | "email" | "role";
+            /** @enum {string} */
+            sens?: "asc" | "desc";
         };
         ApiResponsePageResponseMembreProjetResponse: {
             status?: string;
@@ -986,7 +1024,7 @@ export interface operations {
     findAll: {
         parameters: {
             query: {
-                actif?: boolean;
+                recherche: components["schemas"]["RechercheUtilisateursRequest"];
                 pagination: components["schemas"]["PaginationRequest"];
             };
             header?: never;
@@ -1033,7 +1071,7 @@ export interface operations {
     findAll_1: {
         parameters: {
             query: {
-                projetId?: number;
+                recherche: components["schemas"]["RechercheTachesRequest"];
                 pagination: components["schemas"]["PaginationRequest"];
             };
             header?: never;
@@ -1127,6 +1165,7 @@ export interface operations {
     findAll_2: {
         parameters: {
             query: {
+                recherche: components["schemas"]["RechercheProjetsRequest"];
                 pagination: components["schemas"]["PaginationRequest"];
             };
             header?: never;
@@ -1173,6 +1212,7 @@ export interface operations {
     findAll_3: {
         parameters: {
             query: {
+                recherche: components["schemas"]["RechercheMembresRequest"];
                 pagination: components["schemas"]["PaginationRequest"];
             };
             header?: never;
