@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ApiError, valeurOuErreurApi } from "@/lib/api/erreurs"
 import { listerProjets } from "@/lib/api/projets"
 import { formaterPeriode } from "@/lib/format"
+import { LIBELLES_ROLE_PROJET } from "@/lib/membres/schema-membre"
 
 type Props = Readonly<{
 	/** Numéro de page, à partir de 1. */
@@ -29,7 +30,7 @@ export async function ListeProjets({ page, estAdmin }: Props) {
 			<AlerteErreur message={projets.message} identifiantCorrelation={projets.identifiantCorrelation} />
 		)
 	}
-	const colonnes = estAdmin ? 5 : 4
+	const colonnes = estAdmin ? 6 : 5
 
 	return (
 		<>
@@ -41,6 +42,7 @@ export async function ListeProjets({ page, estAdmin }: Props) {
 								<TableHead className="pl-4">Code</TableHead>
 								<TableHead>Nom</TableHead>
 								<TableHead className="hidden md:table-cell">Période</TableHead>
+								<TableHead className="hidden sm:table-cell">Mon rôle</TableHead>
 								<TableHead className={estAdmin ? undefined : "pr-4"}>Statut</TableHead>
 								{estAdmin && (
 									<TableHead className="pr-4 text-right">
@@ -75,6 +77,9 @@ export async function ListeProjets({ page, estAdmin }: Props) {
 										</TableCell>
 										<TableCell className="hidden text-muted-foreground md:table-cell">
 											{formaterPeriode(projet.dateDebut, projet.dateFin)}
+										</TableCell>
+										<TableCell className="hidden sm:table-cell">
+											{projet.monRole && LIBELLES_ROLE_PROJET[projet.monRole]}
 										</TableCell>
 										<TableCell className={estAdmin ? undefined : "pr-4"}>
 											{projet.actif ? (

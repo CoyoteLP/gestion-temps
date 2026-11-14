@@ -1,6 +1,7 @@
 package com.lirox.gestiontemps.repository;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -43,6 +44,22 @@ public interface MembreProjetRepository extends JpaRepository<MembreProjet, Long
 	 * @return true si l'utilisateur est membre du projet avec l'un de ces rôles
 	 */
 	boolean existsByProjetIdAndUtilisateurIdAndRoleIn(Long projetId, Long utilisateurId, Collection<RoleProjet> roles);
+
+	/**
+	 * @param projetId      identifiant du projet
+	 * @param utilisateurId identifiant de l'utilisateur
+	 * @return l'appartenance de l'utilisateur au projet, si elle existe
+	 */
+	Optional<MembreProjet> findByProjetIdAndUtilisateurId(Long projetId, Long utilisateurId);
+
+	/**
+	 * Appartenances d'un utilisateur à une page de projets, en une seule requête.
+	 *
+	 * @param utilisateurId identifiant de l'utilisateur
+	 * @param projetIds     projets recherchés
+	 * @return les appartenances de l'utilisateur à ceux de ces projets dont il est membre
+	 */
+	List<MembreProjet> findByUtilisateurIdAndProjetIdIn(Long utilisateurId, Collection<Long> projetIds);
 
 	/**
 	 * Contrôle d'unicité lors d'une modification.

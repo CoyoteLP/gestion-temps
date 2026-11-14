@@ -128,6 +128,20 @@ public class UtilisateurController {
 	}
 
 	/**
+	 * {@code DELETE /api/utilisateurs/{id}/rattachement} : détache la fiche de son compte de connexion
+	 * (administrateur) ; elle sera reprise par l'email vérifié à la connexion suivante. Sans effet sur
+	 * une fiche non rattachée.
+	 *
+	 * @param id identifiant de l'utilisateur
+	 * @return une réponse sans données avec un message de confirmation
+	 */
+	@DeleteMapping("/{id}/rattachement")
+	public ApiResponse<Void> reinitialiserRattachement(@PathVariable Long id) {
+		utilisateurService.reinitialiserRattachement(id);
+		return ApiResponse.success(null, "Le rattachement du compte a été réinitialisé");
+	}
+
+	/**
 	 * {@code DELETE /api/utilisateurs/{id}} : suppression d'un utilisateur sans saisie.
 	 *
 	 * @param id identifiant de l'utilisateur

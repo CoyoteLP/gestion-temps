@@ -35,6 +35,7 @@ describe("MenuUtilisateur", () => {
 			nom: "Durand",
 			prenom: "Jeanne",
 			actif: true,
+			rattache: true,
 			audit: null,
 		})
 

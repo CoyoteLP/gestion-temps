@@ -83,6 +83,7 @@ describe("valeursDuProjet", () => {
 			dateDebut: "2026-01-01",
 			dateFin: null,
 			actif: false,
+			monRole: null,
 			audit: null,
 		} satisfies Projet
 

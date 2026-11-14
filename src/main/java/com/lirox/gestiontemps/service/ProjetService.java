@@ -1,6 +1,7 @@
 package com.lirox.gestiontemps.service;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.lirox.gestiontemps.domain.Projet;
+import com.lirox.gestiontemps.domain.RoleProjet;
 import com.lirox.gestiontemps.dto.PageResponse;
 import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.ProjetRequest;
@@ -43,26 +45,28 @@ public class ProjetService {
 	/**
 	 * @param pagination page demandée
 	 * @return une page de projets, par identifiant croissant : tous pour un administrateur, ceux dont
-	 *         il est membre pour un collaborateur
+	 *         il est membre pour un collaborateur ; chacun avec le rôle de l'appelant ({@code monRole},
+	 *         lu en une seule requête pour la page)
 	 */
 	public PageResponse<ProjetResponse> findAll(PaginationRequest pagination) {
 		PageRequest page = pagination.versPageRequest(Sort.by("id"));
-		Long utilisateurId = accesProjetService.utilisateurRestreint();
-		Page<Projet> projets = utilisateurId == null ? projetRepository.findAll(page)
-				: projetRepository.findDontMembre(utilisateurId, page);
-		return PageResponse.from(projets, ProjetResponse::from);
+		Long moi = accesProjetService.idFicheCourante();
+		Page<Projet> projets = accesProjetService.estAdmin() ? projetRepository.findAll(page)
+				: projetRepository.findDontMembre(moi, page);
+		Map<Long, RoleProjet> roles = moi == null ? Map.of()
+				: accesProjetService.rolesDans(projets.map(Projet::getId).getContent(), moi);
+		return PageResponse.from(projets, projet -> ProjetResponse.from(projet, roles.get(projet.getId())));
 	}
 
 	/**
 	 * @param id identifiant du projet
-	 * @return le projet
+	 * @return le projet, avec le rôle de l'appelant ({@code monRole})
 	 * @throws ResourceNotFoundException si le projet n'existe pas
 	 * @throws AccesRefuseException      si l'appelant n'est ni administrateur ni membre du projet
 	 */
 	public ProjetResponse findById(Long id) {
 		Projet projet = getProjet(id);
-		accesProjetService.verifierAcces(projet.getId());
-		return ProjetResponse.from(projet);
+		return ProjetResponse.from(projet, accesProjetService.roleVerifie(projet.getId()));
 	}
 
 	/**
@@ -97,7 +101,7 @@ public class ProjetService {
 		}
 		apply(request, projet);
 		projetRepository.flush();
-		return ProjetResponse.from(projet);
+		return ProjetResponse.from(projet, accesProjetService.roleVerifie(projet.getId()));
 	}
 
 	/**

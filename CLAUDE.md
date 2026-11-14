@@ -257,7 +257,9 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - Un utilisateur est identifié par la revendication `sub` (colonne `utilisateur.sujet`), rattachée
   une fois par l'email du jeton, seulement s'il est déclaré vérifié (`email_verified`, voir
   `ProprietesSecurite.exigerEmailVerifie`), ou dès la création de sa fiche par inscription
-  (`POST /api/utilisateurs/moi`).
+  (`POST /api/utilisateurs/moi`). Une fiche rattachée n'est jamais reprise par un autre compte ;
+  seul un administrateur la détache (`DELETE /api/utilisateurs/{id}/rattachement`), après quoi elle
+  est reprise par l'email vérifié.
 - Actuator : en prod, sur un port de gestion séparé (`MANAGEMENT_PORT`) sans jeton, réservé au
   réseau interne ; sur le port de l'API (dev, test), santé publique et autres points réservés à
   l'administrateur. Tout nouveau point Actuator exposé suit cette règle (`SecurityConfig`).

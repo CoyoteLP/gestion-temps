@@ -24,6 +24,7 @@ const fiche = (id: number, actif = true): Utilisateur => ({
 	nom: `Nom${id}`,
 	prenom: `Prenom${id}`,
 	actif,
+	rattache: true,
 	audit: null,
 })
 

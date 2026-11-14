@@ -2,6 +2,8 @@ package com.lirox.gestiontemps.service;
 
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -36,6 +38,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class UtilisateurService {
+
+	private static final Logger log = LoggerFactory.getLogger(UtilisateurService.class);
 
 	private final UtilisateurRepository utilisateurRepository;
 	private final SaisieTempsRepository saisieTempsRepository;
@@ -154,6 +158,26 @@ public class UtilisateurService {
 		apply(request, utilisateur);
 		utilisateurRepository.flush();
 		return UtilisateurResponse.from(utilisateur);
+	}
+
+	/**
+	 * Détache la fiche de son compte chez le fournisseur d'identité (compte supprimé puis recréé,
+	 * royaume réimporté…) : à la connexion suivante, elle est reprise par le compte qui présente le
+	 * même email, déclaré vérifié. La modification passe par l'entité : version incrémentée et audit
+	 * renseigné, pour garder la trace de l'administrateur. Une fiche sans rattachement reste inchangée.
+	 *
+	 * @param id identifiant de l'utilisateur
+	 * @throws ResourceNotFoundException si l'utilisateur n'existe pas
+	 */
+	@Transactional
+	public void reinitialiserRattachement(Long id) {
+		Utilisateur utilisateur = getUtilisateur(id);
+		if (utilisateur.getSujet() != null) {
+			utilisateur.setSujet(null);
+			// Écrit tout de suite (audit et version renseignés par l'appelant de la requête)
+			utilisateurRepository.flush();
+			log.info("Rattachement du compte réinitialisé pour l'utilisateur {}", id);
+		}
 	}
 
 	/**

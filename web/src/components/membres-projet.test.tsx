@@ -24,6 +24,7 @@ const lea: Utilisateur = {
 	nom: "Martin",
 	prenom: "Léa",
 	actif: true,
+	rattache: true,
 	audit: null,
 }
 

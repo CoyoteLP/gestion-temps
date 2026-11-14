@@ -1,6 +1,11 @@
 # Plan : lot F3c — réinitialiser le rattachement d'un compte, et rôle de l'utilisateur dans ses projets
 
-> **État (2026-11-14)** : plan à valider, branche `feature/rattachement-et-mon-role`.
+> **État (2026-11-14)** : plan validé (une seule PR ; 200 sans effet pour une fiche non rattachée ;
+> `rattache` dans toutes les réponses utilisateur) et implémenté sur `feature/rattachement-et-mon-role` ;
+> `./mvnw verify` (374 tests) et `web/` (375 tests, build) verts ; `/review` et `web:review` faites,
+> contrôle d'accès de la fiche projet centralisé (`AccesProjetService.roleVerifie`) ; parcours de bout
+> en bout validé. Liste des projets : 4 requêtes SQL quel que soit le nombre de projets (rôles lus en
+> une seule requête).
 
 Lot backend et front, décidé le 2026-11-14 pendant la vérification de F3 (feuille de route :
 [`front-end-socle.md`](front-end-socle.md)). Deux petites évolutions indépendantes, regroupées.

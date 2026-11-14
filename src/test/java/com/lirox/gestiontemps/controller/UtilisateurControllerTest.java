@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -429,6 +430,80 @@ class UtilisateurControllerTest {
 				.andExpect(jsonPath("$.data.contenu[0].email").value("actif@lirox.com"));
 		mockMvc.perform(get("/api/utilisateurs"))
 				.andExpect(jsonPath("$.data.total").value(2));
+	}
+
+	// Réinitialisation du rattachement d'une fiche à son compte de connexion
+
+	@Test
+	void lAdministrateurReinitialiseLeRattachementDUneFiche() throws Exception {
+		Utilisateur utilisateur = save("cdurand@lirox.com", "ancien-compte", true);
+		mockMvc.perform(get("/api/utilisateurs/{id}", utilisateur.getId()))
+				.andExpect(jsonPath("$.data.rattache").value(true));
+
+		mockMvc.perform(delete("/api/utilisateurs/{id}/rattachement", utilisateur.getId()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data").value(nullValue()))
+				.andExpect(jsonPath("$.message").value("Le rattachement du compte a été réinitialisé"));
+
+		mockMvc.perform(get("/api/utilisateurs/{id}", utilisateur.getId()))
+				.andExpect(jsonPath("$.data.rattache").value(false))
+				.andExpect(jsonPath("$.data.version").value(1))
+				.andExpect(jsonPath("$.data.audit.modifiePar").value(JetonsDeTest.SUJET_ADMIN));
+	}
+
+	@Test
+	void reinitialiserUneFicheNonRattacheeEstSansEffet() throws Exception {
+		Utilisateur utilisateur = save("cdurand@lirox.com");
+
+		mockMvc.perform(delete("/api/utilisateurs/{id}/rattachement", utilisateur.getId()))
+				.andExpect(status().isOk());
+		utilisateurRepository.flush();
+
+		mockMvc.perform(get("/api/utilisateurs/{id}", utilisateur.getId()))
+				.andExpect(jsonPath("$.data.rattache").value(false))
+				.andExpect(jsonPath("$.data.version").value(0));
+	}
+
+	@Test
+	void reinitialiserLeRattachementDUneFicheInconnueRenvoie404() throws Exception {
+		mockMvc.perform(delete("/api/utilisateurs/{id}/rattachement", 9999))
+				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void seulLAdministrateurReinitialiseUnRattachement() throws Exception {
+		Utilisateur cible = save("cdurand@lirox.com", "ancien-compte", true);
+		Utilisateur collaborateur = save("jdupont@lirox.com", "sujet-jdupont", true);
+
+		mockMvc.perform(delete("/api/utilisateurs/{id}/rattachement", cible.getId())
+				.with(JetonsDeTest.collaborateur(collaborateur)))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(delete("/api/utilisateurs/{id}/rattachement", cible.getId()).with(anonymous()))
+				.andExpect(status().isUnauthorized());
+		assertThat(utilisateurRepository.findById(cible.getId())).get()
+				.satisfies(fiche -> assertThat(fiche.getSujet()).isEqualTo("ancien-compte"));
+	}
+
+	@Test
+	void unNouveauCompteDeMemeEmailVerifieNeReprendLaFicheQuApresLaReinitialisation() throws Exception {
+		Utilisateur fiche = save("cdurand@lirox.com", "ancien-compte", true);
+
+		mockMvc.perform(get("/api/utilisateurs/moi").with(compte("nouveau-compte", identite())))
+				.andExpect(status().isNotFound());
+
+		mockMvc.perform(delete("/api/utilisateurs/{id}/rattachement", fiche.getId()))
+				.andExpect(status().isOk());
+		utilisateurRepository.flush();
+
+		// Reprise par l'email vérifié ; elle n'est enregistrée qu'en écriture (POST /moi, fait par le
+		// front à la connexion, qui répond « déjà enregistré »)
+		mockMvc.perform(get("/api/utilisateurs/moi").with(compte("nouveau-compte", identite())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.id").value(fiche.getId()));
+		mockMvc.perform(post("/api/utilisateurs/moi").with(compte("nouveau-compte", identite())))
+				.andExpect(status().isConflict());
+		assertThat(utilisateurRepository.findBySujet("nouveau-compte")).get()
+				.satisfies(rattachee -> assertThat(rattachee.getId()).isEqualTo(fiche.getId()));
 	}
 
 	/** Revendications d'un compte inscrit chez le fournisseur : email vérifié, prénom et nom. */

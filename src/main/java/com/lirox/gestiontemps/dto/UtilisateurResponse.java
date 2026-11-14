@@ -10,8 +10,10 @@ import com.lirox.gestiontemps.domain.Utilisateur;
  * @param email   adresse email
  * @param nom     nom de famille
  * @param prenom  prénom
- * @param actif   false si l'utilisateur est désactivé
- * @param audit   date et auteur de la création et de la dernière modification
+ * @param actif    false si l'utilisateur est désactivé
+ * @param rattache true si la fiche est rattachée à un compte du fournisseur d'identité (l'identifiant
+ *                 du compte n'est pas exposé) ; réinitialisable par un administrateur
+ * @param audit    date et auteur de la création et de la dernière modification
  */
 public record UtilisateurResponse(
 		Long id,
@@ -20,6 +22,7 @@ public record UtilisateurResponse(
 		String nom,
 		String prenom,
 		boolean actif,
+		boolean rattache,
 		AuditResponse audit) {
 
 	/**
@@ -28,7 +31,8 @@ public record UtilisateurResponse(
 	 */
 	public static UtilisateurResponse from(Utilisateur utilisateur) {
 		return new UtilisateurResponse(utilisateur.getId(), utilisateur.getVersion(), utilisateur.getEmail(),
-				utilisateur.getNom(), utilisateur.getPrenom(), utilisateur.isActif(), AuditResponse.from(utilisateur));
+				utilisateur.getNom(), utilisateur.getPrenom(), utilisateur.isActif(), utilisateur.getSujet() != null,
+				AuditResponse.from(utilisateur));
 	}
 
 }
