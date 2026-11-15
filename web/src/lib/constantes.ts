@@ -54,5 +54,26 @@ export const PROMPT_INSCRIPTION = "create"
 /** Console de compte du fournisseur (mot de passe, email), relative à `AUTH_KEYCLOAK_ISSUER`. */
 export const CHEMIN_CONSOLE_COMPTE = "/account"
 
+/** Fuseau horaire de référence pour la date du jour (même valeur que l'API). */
+export const FUSEAU_HORAIRE = "Europe/Paris"
+
+/** Durée minimale d'une saisie, en heures (`Constantes.DUREE_MIN_SAISIE` de l'API). */
+export const DUREE_MIN_SAISIE = 0.5
+
+/** Durée maximale d'une saisie, en heures. */
+export const DUREE_MAX_SAISIE = 24
+
+/** Pas de la durée d'une saisie, en heures. */
+export const PAS_DUREE_SAISIE = 0.5
+
+/** Total maximal des saisies d'une journée, en heures. */
+export const MAX_HEURES_JOUR = 24
+
+/** Durée d'une journée au-delà de laquelle le front avertit, sans bloquer (l'API refuse à 24 h). */
+export const SEUIL_ALERTE_HEURES_JOUR = 8
+
+/** Longueur maximale du commentaire d'une saisie. */
+export const LONGUEUR_MAX_COMMENTAIRE = 500
+
 /** Durée d'affichage d'un message de confirmation (toast), en millisecondes. */
 export const DUREE_MESSAGE_SUCCES_MS = 10_000

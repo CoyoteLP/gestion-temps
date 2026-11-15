@@ -158,6 +158,12 @@ src/
   de `src/lib/actions/resultats.ts`) : elle est appelable directement, sans passer par la page.
   Erreur de l'API → `etatErreur` (409 → conflit, avec le message de l'API). Un 409 qui désigne un
   champ (code ou membre en double, en création) est rattaché à ce champ.
+- Messages colorés selon leur niveau, avec les couleurs du thème (`globals.css`) : **information en
+  bleu** (`information`), **avertissement en orange** (`avertissement` : l'API acceptera
+  l'enregistrement), **erreur en rouge** (`destructive` : action refusée ou impossible, y compris
+  un message affiché avant l'envoi quand l'API refusera l'enregistrement). Ligne de formulaire :
+  `Message` ; encadré : `Encadre` (information, avertissement) ou `AlerteErreur` (erreur de l'API),
+  dans `src/components/message.tsx`. Une aide de champ (`FieldDescription`) reste en gris.
 - Opération irréversible (suppression, retrait, désactivation) : `DialogueConfirmation`, qui reçoit
   la Server Action liée à sa ressource (`action.bind(null, id)`) et affiche le refus de l'API sans
   se fermer. Un 409 « modifié entre-temps » : `AlerteConflit` (bouton « Recharger »).

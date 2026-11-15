@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest"
 
-import { formaterDate, formaterPeriode, formaterUtilisateur, initiales, nomComplet } from "./format"
+import {
+	formaterDate,
+	formaterDuree,
+	formaterJourCourt,
+	formaterJourLong,
+	formaterPeriode,
+	formaterUtilisateur,
+	initiales,
+	nomComplet,
+} from "./format"
 
 describe("formaterDate", () => {
 	it("affiche une date ISO au format français", () => {
@@ -42,5 +51,20 @@ describe("formaterUtilisateur", () => {
 		expect(formaterUtilisateur({ prenom: "Léa", nom: "Martin", email: "lea@exemple.fr" })).toBe(
 			"Léa Martin — lea@exemple.fr",
 		)
+	})
+})
+
+describe("durées et jours", () => {
+	it.each([
+		[7.5, "7,5 h"],
+		[24, "24 h"],
+		[0, "0 h"],
+	])("affiche %s heures en français", (heures, attendu) => {
+		expect(formaterDuree(heures)).toBe(attendu)
+	})
+
+	it("affiche un jour court et un jour en toutes lettres", () => {
+		expect(formaterJourCourt("2026-11-09")).toBe("lun. 09/11")
+		expect(formaterJourLong("2026-11-09")).toBe("lundi 9 novembre 2026")
 	})
 })

@@ -59,3 +59,29 @@ export function formaterUtilisateur(
 ): string {
 	return `${nomComplet(personne)} — ${personne.email}`
 }
+
+const FORMAT_HEURES = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 })
+
+/**
+ * @param heures durée en heures
+ * @returns la durée au format français (« 7,5 h »)
+ */
+export function formaterDuree(heures: number): string {
+	return `${FORMAT_HEURES.format(heures)} h`
+}
+
+/**
+ * @param jour date ISO (`2026-11-09`)
+ * @returns le jour court (« lun. 09/11 »), pour un en-tête de colonne
+ */
+export function formaterJourCourt(jour: string): string {
+	return format(parseISO(jour), "EEE dd/MM", { locale: fr })
+}
+
+/**
+ * @param jour date ISO (`2026-11-09`)
+ * @returns le jour en toutes lettres (« lundi 9 novembre 2026 »)
+ */
+export function formaterJourLong(jour: string): string {
+	return format(parseISO(jour), "EEEE d MMMM yyyy", { locale: fr })
+}

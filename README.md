@@ -324,6 +324,17 @@ l'administrateur, liste les comptes (en attente par défaut), les active ou les 
 réinitialise le rattachement d'une fiche à son compte de connexion (icône de lien rompu, avec
 confirmation) quand ce compte a été recréé.
 
+**Saisies** (`/saisies`) : la semaine de l'utilisateur connecté (`?semaine=` = date du lundi ;
+navigation semaine par semaine ou choix d'une date). Une grille en lecture cumule les heures par
+tâche et par jour (totaux du jour et de la semaine) ; la liste des saisies de la semaine permet de
+les modifier ou de les supprimer, sauf dans un mois clôturé (lecture seule). Une saisie se crée dans
+un dialogue (projet dont on est membre, tâche, jour, durée par pas de 0,5 h, commentaire), qui
+rappelle le temps déjà saisi ce jour. Au-delà de 8 h dans une journée, la grille et le dialogue
+affichent un avertissement, sans bloquer (l'API ne refuse qu'à 24 h). Deux recopies : « Préremplir depuis la semaine précédente »
+(semaine vide seulement) et « Recopier le lundi sur la semaine » (jours vides du mardi au
+vendredi) ; les saisies refusées par l'API sont listées sans empêcher les autres. Un administrateur
+sans fiche ne saisit pas de temps.
+
 La page Profil modifie le nom et le prénom de la fiche ; le mot de passe et l'email se gèrent dans
 la console de compte de Keycloak (lien « Gérer mon compte de connexion »).
 
