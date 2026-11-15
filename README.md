@@ -75,6 +75,7 @@ Le détail des conventions est dans [CLAUDE.md](CLAUDE.md#git).
 |---------|---------------------|------------------------|
 | GET     | /api/projets        | Liste des projets      |
 | GET     | /api/projets/{id}   | Détail d'un projet     |
+| GET     | /api/projets/synthese?mois=AAAA-MM | Synthèse du mois par projet (administrateur) |
 | POST    | /api/projets        | Création (201)         |
 | PUT     | /api/projets/{id}   | Modification           |
 | DELETE  | /api/projets/{id}   | Suppression            |
@@ -190,6 +191,14 @@ mois) ni supprimées, administrateur compris (422). Seul un administrateur peut 
 (`DELETE /api/clotures/{id}`). Le mois en cours ou à venir ne peut pas être clôturé (422), un mois
 déjà clôturé renvoie 409.
 
+La **synthèse d'un mois** (`GET /api/projets/synthese?mois=2026-10`, administrateur seulement)
+renvoie `projets`, une page qui donne pour chaque projet son code, son nom, son statut, le total des
+heures saisies dans le mois (`totalHeures`, 0 sans saisie) et l'identifiant de sa clôture
+(`clotureId`, null si le mois est ouvert), et `totalHeures`, le total général des projets filtrés
+(toutes pages confondues). Elle liste les projets actifs, et les projets inactifs qui ont des saisies
+ou une clôture ce mois-là, triés par code. Filtres : `projet` (texte contenu dans le code ou le nom),
+`cloture` (`true` : mois clôturé, `false` : ouvert). Mois absent ou invalide : 400.
+
 ## Authentification et droits
 
 Toutes les requêtes (sauf la santé et la documentation, voir « Exploitation ») exigent un jeton d'accès OIDC dans l'en-tête
@@ -214,7 +223,9 @@ Sans jeton valide (signature, émetteur, audience, expiration) : 401.
   projet. `MANAGER` (responsable) et `BACKUP` (suppléant) consultent les saisies de tous les
   membres et clôturent les mois du projet ; `CONTRIBUTEUR` voit le projet et y saisit son temps.
   Seul un membre (tout rôle) peut saisir du temps sur le projet, y compris quand l'administrateur
-  saisit pour lui (sinon 422) ; une saisie existante reste corrigeable après son retrait.
+  saisit pour lui (sinon 422) ; une saisie existante reste corrigeable après son retrait. Chaque
+  membre est renvoyé avec le `nom` et le `prenom` de l'utilisateur (pas son email) : les membres du
+  projet les lisent sans avoir accès aux fiches des utilisateurs.
 - **Rattachement du compte** : l'administrateur crée l'utilisateur avec son email ; à la première
   connexion, l'API le retrouve par l'email du jeton puis mémorise l'identifiant du compte (`sub`).
   L'email doit être déclaré vérifié par le fournisseur (`email_verified: true`) ; pour un
@@ -334,6 +345,20 @@ affichent un avertissement, sans bloquer (l'API ne refuse qu'à 24 h). Deux reco
 (semaine vide seulement) et « Recopier le lundi sur la semaine » (jours vides du mardi au
 vendredi) ; les saisies refusées par l'API sont listées sans empêcher les autres. Un administrateur
 sans fiche ne saisit pas de temps.
+
+**Équipe** (`/equipe?projet=…&mois=AAAA-MM`) : pour un projet dont l'utilisateur est responsable ou
+suppléant (tous pour l'administrateur) et un mois (le mois en cours par défaut), le récapitulatif
+des saisies (total par membre, membres sans saisie compris, total par tâche et du projet) puis leur
+détail, paginé et filtrable par membre et par tâche, en lecture seule. Le statut du mois y est affiché, avec
+« Clôturer ce mois » (mois terminé) ou « Rouvrir » (administrateur). Un contributeur y lit que la
+vue est réservée aux responsables et suppléants. L'administrateur voit en tête la **synthèse du
+mois** de tous les projets (statut ouvert ou clôturé, total d'heures ; filtres par projet et par
+statut ; ligne « Total général » des projets filtrés), avec un cadenas par projet
+pour clôturer (mois terminé) ou rouvrir, et « Clôturer tous les projets ouverts » (projets actifs
+que leurs responsables n'ont pas clôturés).
+
+**Clôtures** : la fiche d'un projet liste ses mois clôturés ; « Clôturer un mois » (administrateur,
+responsable, suppléant ; mois terminé, le précédent par défaut) et « Rouvrir » (administrateur).
 
 La page Profil modifie le nom et le prénom de la fiche ; le mot de passe et l'email se gèrent dans
 la console de compte de Keycloak (lien « Gérer mon compte de connexion »).

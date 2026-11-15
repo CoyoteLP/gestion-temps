@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -14,7 +15,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -33,13 +36,19 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.lirox.gestiontemps.JetonsDeTest;
 import com.lirox.gestiontemps.common.Constantes;
+import com.lirox.gestiontemps.domain.Cloture;
 import com.lirox.gestiontemps.domain.MembreProjet;
 import com.lirox.gestiontemps.domain.Projet;
 import com.lirox.gestiontemps.domain.RoleProjet;
+import com.lirox.gestiontemps.domain.SaisieTemps;
+import com.lirox.gestiontemps.domain.Tache;
 import com.lirox.gestiontemps.domain.Utilisateur;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
+import com.lirox.gestiontemps.repository.ClotureRepository;
 import com.lirox.gestiontemps.repository.MembreProjetRepository;
 import com.lirox.gestiontemps.repository.ProjetRepository;
+import com.lirox.gestiontemps.repository.SaisieTempsRepository;
+import com.lirox.gestiontemps.repository.TacheRepository;
 import com.lirox.gestiontemps.repository.UtilisateurRepository;
 
 @SpringBootTest
@@ -60,6 +69,15 @@ class ProjetControllerTest {
 
 	@Autowired
 	private MembreProjetRepository membreProjetRepository;
+
+	@Autowired
+	private TacheRepository tacheRepository;
+
+	@Autowired
+	private SaisieTempsRepository saisieTempsRepository;
+
+	@Autowired
+	private ClotureRepository clotureRepository;
 
 	@Test
 	void createRetourne201AvecLocation() throws Exception {
@@ -586,6 +604,113 @@ class ProjetControllerTest {
 		membre.setUtilisateur(u);
 		membre.setRole(role);
 		membreProjetRepository.save(membre);
+	}
+
+	// Synthèse mensuelle (administrateur)
+
+	@Test
+	void syntheseDuMoisTotaliseLesHeuresEtIndiqueLaCloture() throws Exception {
+		Cloture clotureA = preparerSynthese();
+
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.projets.total").value(4))
+				.andExpect(jsonPath("$.data.projets.contenu[*].code").value(contains("PJ-A", "PJ-B", "PJ-C", "PJ-D")))
+				.andExpect(jsonPath("$.data.projets.contenu[0].totalHeures").value(9.5))
+				.andExpect(jsonPath("$.data.projets.contenu[0].clotureId").value(clotureA.getId()))
+				.andExpect(jsonPath("$.data.projets.contenu[1].totalHeures").value(0))
+				.andExpect(jsonPath("$.data.projets.contenu[1].clotureId").value(nullValue()))
+				.andExpect(jsonPath("$.data.projets.contenu[2].totalHeures").value(3))
+				.andExpect(jsonPath("$.data.projets.contenu[2].actif").value(false))
+				.andExpect(jsonPath("$.data.projets.contenu[3].totalHeures").value(0))
+				.andExpect(jsonPath("$.data.projets.contenu[3].clotureId").isNumber())
+				// Total général : tous les projets, saisies d'un autre mois exclues
+				.andExpect(jsonPath("$.data.totalHeures").value(12.5));
+	}
+
+	@Test
+	void syntheseDuMoisFiltreParProjetEtParClotureAvecSonTotal() throws Exception {
+		preparerSynthese();
+
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10").param("projet", "pj-c"))
+				.andExpect(jsonPath("$.data.projets.contenu[*].code").value(contains("PJ-C")))
+				.andExpect(jsonPath("$.data.totalHeures").value(3));
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10").param("projet", "Projet D"))
+				.andExpect(jsonPath("$.data.projets.contenu[*].code").value(contains("PJ-D")));
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10").param("cloture", "true"))
+				.andExpect(jsonPath("$.data.projets.contenu[*].code").value(contains("PJ-A", "PJ-D")))
+				.andExpect(jsonPath("$.data.totalHeures").value(9.5));
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10").param("cloture", "false"))
+				.andExpect(jsonPath("$.data.projets.contenu[*].code").value(contains("PJ-B", "PJ-C")))
+				.andExpect(jsonPath("$.data.totalHeures").value(3));
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10").param("projet", "inconnu"))
+				.andExpect(jsonPath("$.data.projets.total").value(0))
+				.andExpect(jsonPath("$.data.totalHeures").value(0));
+	}
+
+	/**
+	 * Octobre 2026 : PJ-A actif clôturé (9,5 h, plus 4 h en novembre), PJ-B actif ouvert sans saisie,
+	 * PJ-C inactif avec 3 h, PJ-D inactif clôturé sans saisie, PJ-E inactif sans rien (exclu).
+	 *
+	 * @return la clôture d'octobre de PJ-A
+	 */
+	private Cloture preparerSynthese() {
+		Projet a = save("PJ-A");
+		Projet b = save("PJ-B");
+		Projet inactifAvecSaisie = save("PJ-C", "Projet C", null, false);
+		Projet inactifClos = save("PJ-D", "Projet D", null, false);
+		save("PJ-E", "Projet E", null, false);
+		Utilisateur u = saveMembre(a, "jdupont@lirox.com", RoleProjet.CONTRIBUTEUR);
+		Tache tacheA = saveTache(a);
+		saveSaisie(u, tacheA, LocalDate.of(2026, 10, 5), "7.5");
+		saveSaisie(u, tacheA, LocalDate.of(2026, 10, 31), "2");
+		saveSaisie(u, tacheA, LocalDate.of(2026, 11, 1), "4");
+		saveSaisie(u, saveTache(inactifAvecSaisie), LocalDate.of(2026, 10, 1), "3");
+		saveCloture(inactifClos, YearMonth.of(2026, 10));
+		saveCloture(b, YearMonth.of(2026, 9));
+		return saveCloture(a, YearMonth.of(2026, 10));
+	}
+
+	@Test
+	void syntheseDuMoisEstReserveeALAdministrateur() throws Exception {
+		Projet projet = save("PJ-A");
+		Utilisateur responsable = saveMembre(projet, "jdupont@lirox.com", RoleProjet.MANAGER);
+
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10").with(collaborateur(responsable)))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10").with(anonymous()))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void syntheseDuMoisExigeUnMoisValide() throws Exception {
+		mockMvc.perform(get("/api/projets/synthese"))
+				.andExpect(status().isBadRequest());
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-13"))
+				.andExpect(status().isBadRequest());
+	}
+
+	private Tache saveTache(Projet p) {
+		Tache tache = new Tache();
+		tache.setProjet(p);
+		tache.setLibelle("Développement");
+		return tacheRepository.save(tache);
+	}
+
+	private void saveSaisie(Utilisateur u, Tache tache, LocalDate jour, String duree) {
+		SaisieTemps saisie = new SaisieTemps();
+		saisie.setUtilisateur(u);
+		saisie.setTache(tache);
+		saisie.setJour(jour);
+		saisie.setDuree(new BigDecimal(duree));
+		saisieTempsRepository.save(saisie);
+	}
+
+	private Cloture saveCloture(Projet p, YearMonth mois) {
+		Cloture cloture = new Cloture();
+		cloture.setProjet(p);
+		cloture.setMois(mois.atDay(1));
+		return clotureRepository.save(cloture);
 	}
 
 }

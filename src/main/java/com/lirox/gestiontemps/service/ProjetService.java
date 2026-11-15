@@ -1,10 +1,14 @@
 package com.lirox.gestiontemps.service;
 
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +20,8 @@ import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.ProjetRequest;
 import com.lirox.gestiontemps.dto.ProjetResponse;
 import com.lirox.gestiontemps.dto.RechercheProjetsRequest;
+import com.lirox.gestiontemps.dto.RechercheSyntheseRequest;
+import com.lirox.gestiontemps.dto.SyntheseMoisResponse;
 import com.lirox.gestiontemps.exception.AccesRefuseException;
 import com.lirox.gestiontemps.exception.DuplicateResourceException;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
@@ -59,6 +65,29 @@ public class ProjetService {
 		Map<Long, RoleProjet> roles = moi == null ? Map.of()
 				: accesProjetService.rolesDans(projets.map(Projet::getId).getContent(), moi);
 		return PageResponse.from(projets, projet -> ProjetResponse.from(projet, roles.get(projet.getId())));
+	}
+
+	/**
+	 * Synthèse d'un mois par projet (réservée à l'administrateur par {@code SecurityConfig}) : total
+	 * des heures saisies et clôture du mois, en une requête pour la page, et total général des projets
+	 * filtrés en une seconde requête.
+	 *
+	 * @param mois       mois de la synthèse
+	 * @param recherche  filtres : texte du code ou du nom, mois clôturé ou ouvert
+	 * @param pagination page demandée
+	 * @return une page de synthèses, triées par code (projets actifs, et projets inactifs qui ont des
+	 *         saisies ou une clôture ce mois-là), et le total général
+	 */
+	public SyntheseMoisResponse syntheseDuMois(YearMonth mois, RechercheSyntheseRequest recherche,
+			PaginationRequest pagination) {
+		LocalDate debut = mois.atDay(1);
+		LocalDate fin = mois.atEndOfMonth();
+		String motif = MotifRecherche.contient(recherche.projet());
+		PageRequest page = pagination.versPageRequest(Sort.by("code", "id"));
+		return new SyntheseMoisResponse(
+				PageResponse.from(projetRepository.syntheseDuMois(debut, fin, motif, recherche.cloture(), page),
+						Function.identity()),
+				projetRepository.totalDuMois(debut, fin, motif, recherche.cloture()));
 	}
 
 	/**

@@ -152,3 +152,16 @@ export function versActif(valeur: string | undefined): boolean | undefined {
 	}
 	return valeur === "inactif" ? false : undefined
 }
+
+/**
+ * Valeur à envoyer à l'API pour un filtre de clôture (`cloture`, `ouvert`, autre = tous).
+ *
+ * @param valeur valeur du filtre dans l'état de la liste
+ * @returns true (mois clôturé), false (ouvert), ou undefined (non filtré)
+ */
+export function versCloture(valeur: string | undefined): boolean | undefined {
+	if (valeur === "cloture") {
+		return true
+	}
+	return valeur === "ouvert" ? false : undefined
+}

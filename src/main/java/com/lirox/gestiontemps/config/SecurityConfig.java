@@ -46,7 +46,8 @@ import com.lirox.gestiontemps.service.UtilisateurCourantService;
  * atteint ; réservés au rôle {@link Constantes#ROLE_ADMIN} sur le port de l'API ;</li>
  * <li>sa propre fiche ({@code /api/utilisateurs/moi}) : tout utilisateur authentifié, même sans
  * fiche ou avec une fiche inactive (inscription, attente de validation) ;</li>
- * <li>la liste et le détail des utilisateurs sont réservés au rôle {@link Constantes#ROLE_ADMIN} ;</li>
+ * <li>la liste et le détail des utilisateurs, et la synthèse mensuelle des projets
+ * ({@code /api/projets/synthese}), sont réservés au rôle {@link Constantes#ROLE_ADMIN} ;</li>
  * <li>un utilisateur dont la fiche est active (ou un administrateur, même sans fiche) peut lire
  * ({@code GET}), gérer ses saisies de temps et demander une clôture ; les règles fines (ses propres
  * saisies, membres d'un projet) sont appliquées par les services. Un compte sans fiche active
@@ -96,6 +97,7 @@ public class SecurityConfig {
 						.requestMatchers("/api/utilisateurs/moi").authenticated()
 						.requestMatchers(HttpMethod.GET, "/api/utilisateurs", "/api/utilisateurs/**")
 						.hasRole(Constantes.ROLE_ADMIN)
+						.requestMatchers(HttpMethod.GET, "/api/projets/synthese").hasRole(Constantes.ROLE_ADMIN)
 						.requestMatchers(HttpMethod.GET, "/api/**").access(compteActif)
 						.requestMatchers("/api/saisies-temps", "/api/saisies-temps/**").access(compteActif)
 						.requestMatchers(HttpMethod.POST, "/api/clotures", "/api/clotures/tous-projets").access(compteActif)

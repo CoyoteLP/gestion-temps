@@ -85,3 +85,11 @@ export function formaterJourCourt(jour: string): string {
 export function formaterJourLong(jour: string): string {
 	return format(parseISO(jour), "EEEE d MMMM yyyy", { locale: fr })
 }
+
+/**
+ * @param mois mois ISO (`2026-10`)
+ * @returns le mois en toutes lettres (« octobre 2026 »)
+ */
+export function formaterMois(mois: string): string {
+	return format(parseISO(`${mois}-01`), "MMMM yyyy", { locale: fr })
+}

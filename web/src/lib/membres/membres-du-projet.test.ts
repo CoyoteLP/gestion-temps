@@ -37,6 +37,8 @@ const membre = (id: number, utilisateurId: number): MembreProjet => ({
 	version: 0,
 	projetId: 3,
 	utilisateurId,
+	nom: `Nom${utilisateurId}`,
+	prenom: `Prenom${utilisateurId}`,
 	role: "MANAGER",
 	audit: null,
 })

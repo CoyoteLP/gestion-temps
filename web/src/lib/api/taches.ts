@@ -67,3 +67,18 @@ export function listerToutesLesTaches(): Promise<Tache[]> {
 		apiFetch<PageResponse<Tache>>(CHEMIN_TACHES, { parametres: { page, taille: TAILLE_PAGE_MAX } }),
 	)
 }
+
+/**
+ * Toutes les tâches d'un projet, actives ou non : pour les libellés de ses saisies.
+ *
+ * @param projetId identifiant du projet
+ * @returns les tâches du projet, triées par l'API
+ * @throws ApiError 403 si l'appelant n'est pas membre du projet
+ */
+export function listerToutesLesTachesDuProjet(projetId: number): Promise<Tache[]> {
+	return lireToutesLesPages((page) =>
+		apiFetch<PageResponse<Tache>>(CHEMIN_TACHES, {
+			parametres: { projetId, page, taille: TAILLE_PAGE_MAX },
+		}),
+	)
+}

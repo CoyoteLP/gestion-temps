@@ -212,6 +212,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projets/synthese": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["syntheseDuMois"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/clotures/{id}": {
         parameters: {
             query?: never;
@@ -368,6 +384,8 @@ export interface components {
             projetId?: number;
             /** Format: int64 */
             utilisateurId?: number;
+            nom?: string;
+            prenom?: string;
             /** @enum {string} */
             role?: "MANAGER" | "BACKUP" | "CONTRIBUTEUR";
             audit?: components["schemas"]["AuditResponse"];
@@ -503,9 +521,9 @@ export interface components {
             du?: string;
             /** Format: date */
             au?: string;
+            periodeOrdonnee?: boolean;
             periodeLimitee?: boolean;
             periodeComplete?: boolean;
-            periodeOrdonnee?: boolean;
         };
         ApiResponsePageResponseSaisieTempsResponse: {
             status?: string;
@@ -573,6 +591,40 @@ export interface components {
             total?: number;
             /** Format: int32 */
             pages?: number;
+        };
+        RechercheSyntheseRequest: {
+            projet?: string;
+            cloture?: boolean;
+        };
+        ApiResponseSyntheseMoisResponse: {
+            status?: string;
+            data?: components["schemas"]["SyntheseMoisResponse"];
+            message?: string;
+        };
+        PageResponseSyntheseProjetResponse: {
+            contenu?: components["schemas"]["SyntheseProjetResponse"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            taille?: number;
+            /** Format: int64 */
+            total?: number;
+            /** Format: int32 */
+            pages?: number;
+        };
+        SyntheseMoisResponse: {
+            projets?: components["schemas"]["PageResponseSyntheseProjetResponse"];
+            totalHeures?: number;
+        };
+        SyntheseProjetResponse: {
+            /** Format: int64 */
+            projetId?: number;
+            code?: string;
+            nom?: string;
+            actif?: boolean;
+            totalHeures?: number;
+            /** Format: int64 */
+            clotureId?: number;
         };
         ApiResponsePageResponseClotureResponse: {
             status?: string;
@@ -1328,6 +1380,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseListClotureResponse"];
+                };
+            };
+        };
+    };
+    syntheseDuMois: {
+        parameters: {
+            query: {
+                mois: string;
+                recherche: components["schemas"]["RechercheSyntheseRequest"];
+                pagination: components["schemas"]["PaginationRequest"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSyntheseMoisResponse"];
                 };
             };
         };
