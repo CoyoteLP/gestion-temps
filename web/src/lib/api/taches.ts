@@ -1,9 +1,11 @@
 import "server-only"
 
+import { TAILLE_PAGE_MAX } from "@/lib/constantes"
 import { type EtatListe, versActif } from "@/lib/listes/etat-liste"
 
 import { apiFetch } from "./client"
 import type { Tache, TacheRequest } from "./modeles"
+import { lireToutesLesPages } from "./pages"
 import { parametresTri } from "./parametres-liste"
 import type { PageResponse } from "./types"
 
@@ -51,4 +53,17 @@ export function modifierTache(id: number, tache: TacheRequest): Promise<Tache> {
  */
 export async function supprimerTache(id: number): Promise<void> {
 	await apiFetch<null>(`${CHEMIN_TACHES}/${id}`, { methode: "DELETE" })
+}
+
+/**
+ * Toutes les tâches visibles par l'utilisateur (celles des projets dont il est membre), actives ou
+ * non : pour le choix d'une tâche et les libellés des saisies.
+ *
+ * @returns les tâches, triées par l'API
+ * @throws ApiError si l'API refuse ou est injoignable
+ */
+export function listerToutesLesTaches(): Promise<Tache[]> {
+	return lireToutesLesPages((page) =>
+		apiFetch<PageResponse<Tache>>(CHEMIN_TACHES, { parametres: { page, taille: TAILLE_PAGE_MAX } }),
+	)
 }

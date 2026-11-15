@@ -41,6 +41,15 @@ export type MembreProjetRequest = Requete<Schemas["MembreProjetRequest"]>
 /** Modification d'une fiche par un administrateur (`PUT /api/utilisateurs/{id}`). */
 export type UtilisateurRequest = Schemas["UtilisateurRequest"]
 
+/** Saisie de temps ; `duree` en heures (multiple de 0,5). */
+export type Saisie = AvecAudit<Reponse<Schemas["SaisieTempsResponse"], "commentaire">>
+
+/** Création ou modification d'une saisie : sans `utilisateurId`, l'API retient l'appelant. */
+export type SaisieRequest = Requete<Omit<Schemas["SaisieTempsRequest"], "utilisateurId">>
+
+/** Mois clôturé pour un projet (`mois` au format `AAAA-MM`). */
+export type Cloture = AvecAudit<Reponse<Schemas["ClotureResponse"]>>
+
 /** Fiche utilisateur ; `actif: false` = en attente de validation par un administrateur, ou désactivée. */
 export type Utilisateur = AvecAudit<Reponse<Schemas["UtilisateurResponse"]>>
 

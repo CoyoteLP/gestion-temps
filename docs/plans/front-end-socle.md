@@ -177,6 +177,8 @@ Aucun code Java ne change dans ce lot.
   badge sur la fiche (rien pour un administrateur non membre). Plan à valider.
 - **F4** : saisies de temps (choix du projet puis de la tâche, saisie par jour ou par semaine,
   total journalier, mois clôturés en lecture seule).
+- **F4b** (décidé le 2026-11-14) : saisies de l'équipe d'un projet (responsables et suppléants),
+  clôture et réouverture des mois ; éventuellement saisie pour un autre utilisateur (administrateur).
 - **F5** : déploiement du front (sortie `standalone`, image, `docs/DEPLOIEMENT.md`) et tests E2E Playwright.
   Avant la mise en production, réexaminer Auth.js : au lot F0, `next-auth` v5 n'existait qu'en
   bêta (5.0.0-beta.32, dernière publication en juillet 2026). S'il n'a toujours pas de version
