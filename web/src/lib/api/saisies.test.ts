@@ -3,7 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { apiFetch } from "./client"
 import { listerCloturesDuMois } from "./clotures"
 import { listerTousLesProjets } from "./projets"
-import { creerSaisie, listerSaisies, modifierSaisie, supprimerSaisie } from "./saisies"
+import {
+	creerSaisie,
+	listerSaisies,
+	listerSaisiesDuProjet,
+	modifierSaisie,
+	rechercherSaisiesDuProjet,
+	supprimerSaisie,
+} from "./saisies"
 import { listerToutesLesTaches } from "./taches"
 
 vi.mock("./client", () => ({ apiFetch: vi.fn() }))
@@ -22,6 +29,26 @@ describe("saisies", () => {
 
 		expect(apiFetchSimule).toHaveBeenCalledWith("/api/saisies-temps", {
 			parametres: { utilisateurId: 7, du: "2026-11-09", au: "2026-11-15", page: 1, taille: 100 },
+		})
+	})
+
+	it("lit toutes les saisies d'un projet sur un mois, puis une page filtrée par membre et tâche", async () => {
+		await listerSaisiesDuProjet(3, "2026-10-01", "2026-10-31")
+		await rechercherSaisiesDuProjet(3, "2026-10-01", "2026-10-31", 2, { utilisateurId: 7, tacheId: 8 })
+
+		expect(apiFetchSimule).toHaveBeenNthCalledWith(1, "/api/saisies-temps", {
+			parametres: { projetId: 3, du: "2026-10-01", au: "2026-10-31", page: 1, taille: 100 },
+		})
+		expect(apiFetchSimule).toHaveBeenNthCalledWith(2, "/api/saisies-temps", {
+			parametres: {
+				projetId: 3,
+				du: "2026-10-01",
+				au: "2026-10-31",
+				utilisateurId: 7,
+				tacheId: 8,
+				page: 2,
+				taille: 20,
+			},
 		})
 	})
 

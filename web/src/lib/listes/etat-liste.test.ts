@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { LISTE_MEMBRES, LISTE_PROJETS, LISTE_UTILISATEURS } from "./definitions"
-import { aDesFiltres, lienListe, lireEtatListe, versActif } from "./etat-liste"
+import { aDesFiltres, lienListe, lireEtatListe, versActif, versCloture } from "./etat-liste"
 
 describe("lireEtatListe", () => {
 	it("lit la page, le tri, le sens et les filtres admis", () => {
@@ -103,5 +103,17 @@ describe("versActif", () => {
 		[undefined, undefined],
 	])("traduit %s pour l'API", (valeur, attendu) => {
 		expect(versActif(valeur)).toBe(attendu)
+	})
+})
+
+describe("versCloture", () => {
+	it.each([
+		["cloture", true],
+		["ouvert", false],
+		["", undefined],
+		["autre", undefined],
+		[undefined, undefined],
+	])("traduit %s pour l'API", (valeur, attendu) => {
+		expect(versCloture(valeur)).toBe(attendu)
 	})
 })

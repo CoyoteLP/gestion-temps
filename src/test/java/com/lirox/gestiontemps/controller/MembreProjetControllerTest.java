@@ -127,16 +127,22 @@ class MembreProjetControllerTest {
 	@Test
 	void findAllEtFindById() throws Exception {
 		MembreProjet membre = save(projet, utilisateur, RoleProjet.MANAGER);
-		save(projet, saveUtilisateur("pmartin@lirox.com"), RoleProjet.BACKUP);
+		save(projet, saveNomme("pmartin@lirox.com", "Martin", "Paul"), RoleProjet.BACKUP);
 		save(saveProjet("PRJ-02"), utilisateur, RoleProjet.BACKUP);
 		mockMvc.perform(get("/api/projets/{projetId}/membres", projet.getId()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.contenu.length()").value(2))
 				.andExpect(jsonPath("$.data.contenu[0].role").value("MANAGER"))
-				.andExpect(jsonPath("$.data.contenu[1].role").value("BACKUP"));
+				.andExpect(jsonPath("$.data.contenu[1].role").value("BACKUP"))
+				.andExpect(jsonPath("$.data.contenu[0].nom").value("Dupont"))
+				.andExpect(jsonPath("$.data.contenu[0].prenom").value("Jean"))
+				.andExpect(jsonPath("$.data.contenu[1].nom").value("Martin"))
+				.andExpect(jsonPath("$.data.contenu[1].prenom").value("Paul"));
 		mockMvc.perform(get("/api/projets/{projetId}/membres/{id}", projet.getId(), membre.getId()))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.utilisateurId").value(utilisateur.getId()));
+				.andExpect(jsonPath("$.data.utilisateurId").value(utilisateur.getId()))
+				.andExpect(jsonPath("$.data.nom").value("Dupont"))
+				.andExpect(jsonPath("$.data.prenom").value("Jean"));
 	}
 
 	@Test
@@ -253,17 +259,25 @@ class MembreProjetControllerTest {
 	@Test
 	void unMembreVoitLesMembresDeSonProjetEtPasCeuxDesAutres() throws Exception {
 		MembreProjet responsable = save(projet, utilisateur, RoleProjet.MANAGER);
-		Utilisateur contributeur = saveCollaborateur("cdurand@lirox.com");
+		Utilisateur contributeur = saveCollaborateur("cdurand@lirox.com", "Durand", "Claire");
 		save(projet, contributeur, RoleProjet.CONTRIBUTEUR);
 		Projet autreProjet = saveProjet("PRJ-02");
 		MembreProjet membreAilleurs = save(autreProjet, saveUtilisateur("pmartin@lirox.com"), RoleProjet.MANAGER);
 
+		// Un membre lit le nom des autres membres (pas leur email), sans accès à leur fiche
 		mockMvc.perform(get("/api/projets/{projetId}/membres", projet.getId()).with(collaborateur(contributeur)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.total").value(2));
+				.andExpect(jsonPath("$.data.total").value(2))
+				.andExpect(jsonPath("$.data.contenu[0].nom").value("Dupont"))
+				.andExpect(jsonPath("$.data.contenu[0].prenom").value("Jean"))
+				.andExpect(jsonPath("$.data.contenu[0].email").doesNotExist())
+				.andExpect(jsonPath("$.data.contenu[1].nom").value("Durand"))
+				.andExpect(jsonPath("$.data.contenu[1].prenom").value("Claire"));
 		mockMvc.perform(get("/api/projets/{projetId}/membres/{id}", projet.getId(), responsable.getId())
 				.with(collaborateur(contributeur)))
-				.andExpect(status().isOk());
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.nom").value("Dupont"))
+				.andExpect(jsonPath("$.data.prenom").value("Jean"));
 		mockMvc.perform(get("/api/projets/{projetId}/membres", autreProjet.getId()).with(collaborateur(contributeur)))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.message").value("Vous n'êtes pas membre de ce projet"));
@@ -283,8 +297,8 @@ class MembreProjetControllerTest {
 	}
 
 	/** Utilisateur dont le compte OIDC est rattaché (sujet renseigné). */
-	private Utilisateur saveCollaborateur(String email) {
-		Utilisateur u = saveUtilisateur(email);
+	private Utilisateur saveCollaborateur(String email, String nom, String prenom) {
+		Utilisateur u = saveNomme(email, nom, prenom);
 		u.setSujet("sujet-" + email);
 		return u;
 	}

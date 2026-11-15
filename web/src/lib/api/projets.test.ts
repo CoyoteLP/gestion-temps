@@ -3,7 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { EtatListe } from "@/lib/listes/etat-liste"
 
 import { apiFetch } from "./client"
-import { creerProjet, lireProjet, listerProjets, modifierProjet, supprimerProjet } from "./projets"
+import {
+	creerProjet,
+	lireProjet,
+	lireSyntheseDuMois,
+	listerProjets,
+	modifierProjet,
+	supprimerProjet,
+} from "./projets"
 
 vi.mock("./client", () => ({ apiFetch: vi.fn() }))
 
@@ -78,5 +85,19 @@ describe("projets", () => {
 
 		await expect(supprimerProjet(3)).resolves.toBeUndefined()
 		expect(apiFetchSimule).toHaveBeenCalledWith("/api/projets/3", { methode: "DELETE" })
+	})
+})
+
+describe("synthèse du mois", () => {
+	it("lit une page filtrée de la synthèse des projets pour un mois", async () => {
+		await lireSyntheseDuMois("2026-10", etat(2, { filtres: { projet: "pjt", cloture: "ouvert" } }))
+		await lireSyntheseDuMois("2026-10", etat(1, { filtres: { projet: "", cloture: "cloture" } }))
+
+		expect(apiFetchSimule).toHaveBeenNthCalledWith(1, "/api/projets/synthese", {
+			parametres: { mois: "2026-10", page: 2, taille: 20, projet: "pjt", cloture: false },
+		})
+		expect(apiFetchSimule).toHaveBeenNthCalledWith(2, "/api/projets/synthese", {
+			parametres: { mois: "2026-10", page: 1, taille: 20, projet: "", cloture: true },
+		})
 	})
 })

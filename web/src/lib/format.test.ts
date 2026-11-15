@@ -5,6 +5,7 @@ import {
 	formaterDuree,
 	formaterJourCourt,
 	formaterJourLong,
+	formaterMois,
 	formaterPeriode,
 	formaterUtilisateur,
 	initiales,
@@ -66,5 +67,9 @@ describe("durées et jours", () => {
 	it("affiche un jour court et un jour en toutes lettres", () => {
 		expect(formaterJourCourt("2026-11-09")).toBe("lun. 09/11")
 		expect(formaterJourLong("2026-11-09")).toBe("lundi 9 novembre 2026")
+	})
+
+	it("écrit un mois en toutes lettres", () => {
+		expect(formaterMois("2026-10")).toBe("octobre 2026")
 	})
 })

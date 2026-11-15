@@ -1,6 +1,6 @@
 import "server-only"
 
-import { TAILLE_PAGE_MAX } from "@/lib/constantes"
+import { TAILLE_PAGE, TAILLE_PAGE_MAX } from "@/lib/constantes"
 
 import { apiFetch } from "./client"
 import type { Saisie, SaisieRequest } from "./modeles"
@@ -25,6 +25,56 @@ export function listerSaisies(utilisateurId: number, du: string, au: string): Pr
 			parametres: { utilisateurId, du, au, page, taille: TAILLE_PAGE_MAX },
 		}),
 	)
+}
+
+/**
+ * Saisies de tous les membres d'un projet sur une période (un mois : lue en entier, pour le
+ * récapitulatif). Réservé aux responsables, suppléants et à l'administrateur.
+ *
+ * @param projetId identifiant du projet
+ * @param du       premier jour (inclus), `AAAA-MM-JJ`
+ * @param au       dernier jour (inclus), `AAAA-MM-JJ`
+ * @returns les saisies de la période, triées par jour par l'API
+ * @throws ApiError 403 si l'appelant n'est ni responsable ni suppléant du projet
+ */
+export function listerSaisiesDuProjet(projetId: number, du: string, au: string): Promise<Saisie[]> {
+	return lireToutesLesPages((page) =>
+		apiFetch<PageResponse<Saisie>>(CHEMIN_SAISIES, {
+			parametres: { projetId, du, au, page, taille: TAILLE_PAGE_MAX },
+		}),
+	)
+}
+
+/**
+ * Page de saisies d'un projet sur une période, éventuellement d'un seul membre ou d'une seule tâche
+ * (détail de la page Équipe). Triées par jour par l'API.
+ *
+ * @param projetId      identifiant du projet
+ * @param du            premier jour (inclus), `AAAA-MM-JJ`
+ * @param au            dernier jour (inclus), `AAAA-MM-JJ`
+ * @param page          numéro de page (à partir de 1)
+ * @param filtres       membre et tâche dont on veut les saisies ; absents = tous
+ * @returns la page de saisies
+ * @throws ApiError 403 si l'appelant n'est ni responsable ni suppléant du projet
+ */
+export function rechercherSaisiesDuProjet(
+	projetId: number,
+	du: string,
+	au: string,
+	page: number,
+	filtres: Readonly<{ utilisateurId?: number; tacheId?: number }> = {},
+): Promise<PageResponse<Saisie>> {
+	return apiFetch<PageResponse<Saisie>>(CHEMIN_SAISIES, {
+		parametres: {
+			projetId,
+			du,
+			au,
+			utilisateurId: filtres.utilisateurId,
+			tacheId: filtres.tacheId,
+			page,
+			taille: TAILLE_PAGE,
+		},
+	})
 }
 
 /**

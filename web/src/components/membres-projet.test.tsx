@@ -33,6 +33,8 @@ const membre = (utilisateur: Utilisateur | null, utilisateurId = 7): MembreAffic
 	version: 1,
 	projetId: 3,
 	utilisateurId,
+	nom: utilisateur?.nom ?? "Dupont",
+	prenom: utilisateur?.prenom ?? "Jean",
 	role: "MANAGER",
 	audit: null,
 	utilisateur,

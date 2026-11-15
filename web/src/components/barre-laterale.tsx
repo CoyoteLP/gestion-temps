@@ -1,4 +1,4 @@
-import { ClockIcon, FolderKanbanIcon, UserIcon, UsersIcon } from "lucide-react"
+import { ClockIcon, FolderKanbanIcon, UserIcon, UsersIcon, UsersRoundIcon } from "lucide-react"
 import Link from "next/link"
 import { Suspense } from "react"
 
@@ -42,6 +42,7 @@ export function BarreLaterale() {
 					<SidebarGroupContent>
 						<SidebarMenu>
 							<EntreeNavigation titre="Saisies" lien="/saisies" icone={<ClockIcon />} />
+							<EntreeNavigation titre="Équipe" lien="/equipe" icone={<UsersRoundIcon />} />
 							<EntreeNavigation titre="Projets" lien="/projets" icone={<FolderKanbanIcon />} />
 							<Suspense fallback={null}>
 								<ReserveAdmin>

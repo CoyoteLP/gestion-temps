@@ -3,7 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { EtatListe } from "@/lib/listes/etat-liste"
 
 import { apiFetch } from "./client"
-import { creerTache, listerTaches, modifierTache, supprimerTache } from "./taches"
+import {
+	creerTache,
+	listerTaches,
+	listerToutesLesTachesDuProjet,
+	modifierTache,
+	supprimerTache,
+} from "./taches"
 
 vi.mock("./client", () => ({ apiFetch: vi.fn() }))
 
@@ -63,5 +69,17 @@ describe("taches", () => {
 		await supprimerTache(8)
 
 		expect(apiFetchSimule).toHaveBeenCalledWith("/api/taches/8", { methode: "DELETE" })
+	})
+})
+
+describe("toutes les tâches d'un projet", () => {
+	it("lit toutes les pages des tâches du projet, actives ou non", async () => {
+		apiFetchSimule.mockResolvedValue({ contenu: [], page: 1, taille: 100, total: 0, pages: 0 })
+
+		await listerToutesLesTachesDuProjet(3)
+
+		expect(apiFetchSimule).toHaveBeenCalledWith("/api/taches", {
+			parametres: { projetId: 3, page: 1, taille: 100 },
+		})
 	})
 })

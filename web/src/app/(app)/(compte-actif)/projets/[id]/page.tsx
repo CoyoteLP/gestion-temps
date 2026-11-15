@@ -4,6 +4,7 @@ import Link from "next/link"
 import { Suspense } from "react"
 
 import { AlerteErreur } from "@/components/alerte-erreur"
+import { CloturesProjet } from "@/components/clotures-projet"
 import { DialogueConfirmation } from "@/components/dialogue-confirmation"
 import { EnTetePage } from "@/components/en-tete-page"
 import { MembresProjet } from "@/components/membres-projet"
@@ -46,7 +47,10 @@ export default function PageProjet({ params, searchParams }: PageProps<"/projets
 	)
 }
 
-/** Projet, ses tâches et, pour l'administrateur, ses membres et les actions de modification. */
+/**
+ * Projet, ses tâches, ses mois clôturés et, pour l'administrateur, ses membres et les actions de
+ * modification.
+ */
 async function FicheProjet({ params, searchParams }: Readonly<PageProps<"/projets/[id]">>) {
 	const [projet, utilisateur] = await Promise.all([
 		params.then(({ id }) => lireProjetDeLaPage(id)),
@@ -119,6 +123,9 @@ async function FicheProjet({ params, searchParams }: Readonly<PageProps<"/projet
 			</Card>
 			<Suspense fallback={<Chargement libelle="Chargement des tâches" hauteur="h-48" />}>
 				<TachesProjet projetId={projet.id} parametres={parametres} estAdmin={utilisateur.estAdmin} />
+			</Suspense>
+			<Suspense fallback={<Chargement libelle="Chargement des clôtures" hauteur="h-32" />}>
+				<CloturesProjet projet={projet} estAdmin={utilisateur.estAdmin} parametres={parametres} />
 			</Suspense>
 			{utilisateur.estAdmin && (
 				<Suspense fallback={<Chargement libelle="Chargement des membres" hauteur="h-48" />}>

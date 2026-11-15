@@ -2,11 +2,11 @@ import "server-only"
 
 import { cache } from "react"
 
-import { TAILLE_PAGE_MAX } from "@/lib/constantes"
-import { type EtatListe, versActif } from "@/lib/listes/etat-liste"
+import { TAILLE_PAGE, TAILLE_PAGE_MAX } from "@/lib/constantes"
+import { type EtatListe, versActif, versCloture } from "@/lib/listes/etat-liste"
 
 import { apiFetch } from "./client"
-import type { Projet, ProjetRequest } from "./modeles"
+import type { Projet, ProjetRequest, SyntheseMois } from "./modeles"
 import { lireToutesLesPages } from "./pages"
 import { parametresTri } from "./parametres-liste"
 import type { PageResponse } from "./types"
@@ -78,4 +78,25 @@ export function listerTousLesProjets(): Promise<Projet[]> {
 	return lireToutesLesPages((page) =>
 		apiFetch<PageResponse<Projet>>(CHEMIN_PROJETS, { parametres: { page, taille: TAILLE_PAGE_MAX } }),
 	)
+}
+
+/**
+ * Synthèse d'un mois par projet (administrateur), calculée par l'API : total des heures saisies et
+ * clôture du mois par projet, et total général des projets filtrés.
+ *
+ * @param mois mois `AAAA-MM`
+ * @param etat page et filtres de la liste (texte du projet, statut de clôture)
+ * @returns une page de synthèses, triées par code, et le total général
+ * @throws ApiError 403 si l'appelant n'est pas administrateur
+ */
+export function lireSyntheseDuMois(mois: string, etat: EtatListe): Promise<SyntheseMois> {
+	return apiFetch<SyntheseMois>(`${CHEMIN_PROJETS}/synthese`, {
+		parametres: {
+			mois,
+			page: etat.page,
+			taille: TAILLE_PAGE,
+			projet: etat.filtres.projet,
+			cloture: versCloture(etat.filtres.cloture),
+		},
+	})
 }

@@ -1,4 +1,5 @@
 import type { components } from "./schema"
+import type { PageResponse } from "./types"
 
 type Schemas = components["schemas"]
 
@@ -49,6 +50,12 @@ export type SaisieRequest = Requete<Omit<Schemas["SaisieTempsRequest"], "utilisa
 
 /** Mois clôturé pour un projet (`mois` au format `AAAA-MM`). */
 export type Cloture = AvecAudit<Reponse<Schemas["ClotureResponse"]>>
+
+/** Synthèse d'un projet pour un mois (administrateur) : total des heures et clôture (null si ouvert). */
+export type SyntheseProjet = Reponse<Schemas["SyntheseProjetResponse"], "clotureId">
+
+/** Synthèse d'un mois : une page de projets et le total général des projets filtrés. */
+export type SyntheseMois = Readonly<{ projets: PageResponse<SyntheseProjet>; totalHeures: number }>
 
 /** Fiche utilisateur ; `actif: false` = en attente de validation par un administrateur, ou désactivée. */
 export type Utilisateur = AvecAudit<Reponse<Schemas["UtilisateurResponse"]>>

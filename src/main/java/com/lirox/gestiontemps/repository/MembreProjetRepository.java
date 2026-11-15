@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,8 +22,9 @@ public interface MembreProjetRepository extends JpaRepository<MembreProjet, Long
 	/**
 	 * @param id       identifiant du membre
 	 * @param projetId projet auquel il doit appartenir
-	 * @return le membre, s'il appartient bien à ce projet
+	 * @return le membre, s'il appartient bien à ce projet, avec son utilisateur chargé
 	 */
+	@EntityGraph(attributePaths = "utilisateur")
 	Optional<MembreProjet> findByIdAndProjetId(Long id, Long projetId);
 
 	/**
@@ -85,7 +87,8 @@ public interface MembreProjetRepository extends JpaRepository<MembreProjet, Long
 	 * @param email    motif de l'email de l'utilisateur
 	 * @param role     rôle dans le projet
 	 * @param page     page et tri demandés
-	 * @return la page de membres correspondants
+	 * @return la page de membres correspondants, avec leur utilisateur chargé dans la même requête
+	 *         (son nom est renvoyé avec chaque membre)
 	 */
 	@Query("""
 			select m from MembreProjet m
@@ -94,6 +97,7 @@ public interface MembreProjetRepository extends JpaRepository<MembreProjet, Long
 			  and (:email is null or m.utilisateur.email like :email escape '!')
 			  and (:role is null or m.role = :role)
 			""")
+	@EntityGraph(attributePaths = "utilisateur")
 	Page<MembreProjet> search(@Param("projetId") Long projetId, @Param("nom") String nom,
 			@Param("email") String email, @Param("role") RoleProjet role, Pageable page);
 

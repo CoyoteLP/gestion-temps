@@ -6,7 +6,15 @@ import { AffichageFiltres, BoutonFiltres, FiltresColonnes } from "@/components/f
 import { PaginationListe } from "@/components/pagination-liste"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableFooter,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/ui/table"
 import type { PageResponse } from "@/lib/api/types"
 import {
 	aDesFiltres,
@@ -34,6 +42,8 @@ type Props = Readonly<{
 	 * par une cellule d'actions (vide si la liste n'en a pas) : la loupe des filtres est au-dessus.
 	 */
 	children: ReactNode
+	/** Ligne de pied (`TableRow`, total général…), affichée sous les lignes, même sur une liste vide. */
+	pied?: ReactNode
 }>
 
 /**
@@ -51,6 +61,7 @@ export function TableauListe({
 	libelles,
 	messages,
 	children,
+	pied,
 }: Props) {
 	const filtre = aDesFiltres(definition, etat)
 	const nombreColonnes = definition.colonnes.length + 1
@@ -109,6 +120,7 @@ export function TableauListe({
 									children
 								)}
 							</TableBody>
+							{pied && <TableFooter>{pied}</TableFooter>}
 						</Table>
 					</AffichageFiltres>
 				</CardContent>
