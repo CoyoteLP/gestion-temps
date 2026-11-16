@@ -1,8 +1,7 @@
 # Plan : lot F5 — préparer le front à la production
 
-> **État (2026-11-16)** : plan validé. **F5a** (PR #34), **F5b** (PR #35) et **F5c** (PR #36)
-> fusionnés. **F5d** validé et implémenté sur `feature/f5d-tests-e2e` (non commité) : 12 tests
-> Playwright verts sur la pile complète.
+> **État (2026-11-16)** : **terminé**. F5a (PR #34), F5b (PR #35), F5c (PR #36) et F5d (PR #37)
+> fusionnés ; livrés dans la version 1.1.0.
 
 Décisions de l'utilisateur (2026-11-16) :
 - **quatre PR** : F5a authentification, F5b en-têtes de sécurité, F5c image et guide de déploiement,
