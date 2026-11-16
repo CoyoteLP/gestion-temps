@@ -368,6 +368,10 @@ Vérifications :
 par le workflow « Front web » sur chaque pull request qui modifie `web/`). Sous Windows, lancer
 Vitest depuis un chemin en `C:\…` (majuscule), sinon aucun test n'est trouvé.
 
+Image conteneur du front : `docker build -t gestion-temps-web web` (`web/Dockerfile`) ; variables,
+sondes de santé (`/api/sante`, `/api/sante/disponibilite`) et mise en production dans le
+[guide de déploiement](docs/DEPLOIEMENT.md).
+
 Les types de l'API (`web/src/lib/api/schema.d.ts`) sont générés depuis l'API de dev en marche :
 `npm run api:types`.
 

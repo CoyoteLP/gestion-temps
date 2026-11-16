@@ -1,8 +1,9 @@
 # Plan : lot F5 — préparer le front à la production
 
-> **État (2026-11-16)** : plan validé. **F5a** fusionné (PR #34). **F5b** validé et implémenté sur
-> `feature/f5b-en-tetes-securite` (non commité) ; contrôlé sur le build de production : en-têtes
-> présents, tous les scripts servis portent le nonce de la requête.
+> **État (2026-11-16)** : plan validé. **F5a** (PR #34) et **F5b** (PR #35) fusionnés. **F5c**
+> validé et implémenté sur `feature/f5c-deploiement-front` (non commité) : image construite et
+> lancée en local (sondes, redirection, en-têtes, utilisateur `nonroot`, 75 Mo d'application sur
+> 204 Mo d'image de base).
 
 Décisions de l'utilisateur (2026-11-16) :
 - **quatre PR** : F5a authentification, F5b en-têtes de sécurité, F5c image et guide de déploiement,
@@ -140,9 +141,56 @@ upgrade-insecure-requests;                          (en HTTPS seulement)
 - Vérification manuelle sur le build de production : en-têtes présents (`curl -I`), aucune erreur
   CSP dans la console du navigateur sur les pages principales (connexion, saisies, équipe, projets).
 
-## F5c — Image et déploiement (à détailler à son tour)
-Sortie `standalone`, image conteneur du front, guide `docs/DEPLOIEMENT.md` (front public derrière le
-reverse proxy, API interne), variables de production du front, santé.
+## F5c — Image et déploiement
+
+Décisions de l'utilisateur (2026-11-16) : image **distroless Node 22** ; sondes de **vivacité et de
+disponibilité** ; image **construite par la CI** (sans publication).
+
+### Image
+- `next.config.ts` : `output: "standalone"` (serveur Node autonome, seules les dépendances utiles).
+- `web/Dockerfile` en trois étapes, images de base épinglées par empreinte :
+  1. dépendances : `node:22.22.0-bookworm-slim`, `npm ci` ;
+  2. construction : `npm run build` (aucune variable d'environnement requise au build) ;
+  3. exécution : `gcr.io/distroless/nodejs22-debian12:nonroot` (Node 22.22.0, sans shell ni
+     gestionnaire de paquets, utilisateur non root), `node server.js`, port 3000.
+- `web/.dockerignore` : ni `node_modules`, ni `.next`, ni **aucun fichier `.env*`** (sauf
+  `.env.example`), ni tests.
+- Construction depuis le tag de la version, comme l'API :
+  `docker build -t <registre>/gestion-temps-web:1.1.0 web`.
+
+### Santé
+- `GET /api/sante` (vivacité) : 200 `{"statut":"UP"}` tant que le serveur répond.
+- `GET /api/sante/disponibilite` : 200 si le front joint l'API et le fournisseur OIDC (document de
+  découverte), sinon 503 `{"statut":"DOWN"}` ; délai court (2 s) ; aucun détail technique dans la
+  réponse, la cause est journalisée.
+- Publiques (sans session), comme `/connexion` dans le proxy ; l'API est jointe par une fonction de
+  `lib/api/` (règle : pas de `fetch` direct vers l'API ailleurs).
+
+### CI
+- Workflow « Front web » : une étape `docker build` sur les pull requests qui modifient `web/`, sans
+  publication ; la publication reste manuelle depuis le tag.
+
+### Guide de déploiement (`docs/DEPLOIEMENT.md`)
+- Le guide couvre désormais **l'API et le front** : prérequis, image, variables (`SESSION_SECRET`,
+  `OIDC_ISSUER_URI`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_ROLES_CLAIM`, `APP_URL`
+  **obligatoire**, `API_URL`), santé, arrêt, contrôle avant mise en service.
+- **Fournisseur OIDC** : client du front (Authorization Code + PKCE S256, adresse de retour
+  `<APP_URL>/api/auth/callback/keycloak`, retour de déconnexion `<APP_URL>/connexion`, portée
+  `openid profile email`), jetons qui portent l'**audience de l'API**.
+- **Réseau** : seul le front est publié par le reverse proxy HTTPS ; **l'API devient interne**
+  (joignable du front seulement), Actuator reste sur le réseau interne.
+- **Plusieurs instances du front** : même `SESSION_SECRET` partout ; le changer déconnecte tous
+  les utilisateurs (pas d'autre état à partager).
+- Mise à jour : le front n'a ni base ni migration ; il se remplace instance par instance.
+
+### Vérifications
+- Tests : sondes (API ou fournisseur injoignables → 503 sans détail ; chemins publics dans le
+  proxy).
+- Image construite et lancée localement (`docker run` avec le Keycloak et l'API de dev) : sondes,
+  connexion, utilisateur non root, taille de l'image.
+- Réalisé : `public/` est vide et non suivi par Git, il n'est pas copié dans l'image (à ajouter au
+  Dockerfile quand il contiendra des fichiers) ; la CI n'a plus besoin de variables factices ni de
+  secret pour le build ; elle démarre l'image et interroge `/api/sante`.
 
 ## F5d — Tests E2E Playwright (à détailler à son tour)
 Pile complète par docker compose de test, parcours clés (connexion, saisie, clôture, droits),

@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import { jetonAcces } from "@/lib/auth/session"
 import { EN_TETE_CORRELATION } from "@/lib/constantes"
 
-import { apiFetch, construireUrl } from "./client"
+import { apiFetch, apiJoignable, construireUrl } from "./client"
 import { ApiError, STATUT_API_INJOIGNABLE } from "./erreurs"
 
 vi.mock("@/lib/auth/session", () => ({ jetonAcces: vi.fn(async () => "jeton-acces") }))
@@ -16,6 +17,7 @@ beforeEach(() => {
 	vi.stubGlobal("fetch", fetchSimule)
 	vi.spyOn(console, "error").mockImplementation(() => {})
 	fetchSimule.mockReset()
+	vi.mocked(jetonAcces).mockClear()
 })
 
 /** Erreur levée par la promesse, pour en vérifier les propriétés. */
@@ -157,5 +159,25 @@ describe("apiFetch et un chemin invalide", () => {
 	it("n'envoie aucune requête, donc aucun jeton", async () => {
 		await expect(apiFetch("//autre-hote.test/vol")).rejects.toThrow("Chemin d'API invalide")
 		expect(fetchSimule).not.toHaveBeenCalled()
+	})
+})
+
+describe("apiJoignable", () => {
+	it.each([200, 401, 403])("considère l'API joignable quand elle répond %s, sans jeton", async (statut) => {
+		fetchSimule.mockResolvedValue(new Response(null, { status: statut }))
+
+		await expect(apiJoignable(2000)).resolves.toBe(true)
+		const [url, options] = fetchSimule.mock.calls[0]
+		expect(url).toBe("http://api.test:8080/api/projets")
+		expect(options?.headers).not.toHaveProperty("Authorization")
+		expect(jetonAcces).not.toHaveBeenCalled()
+	})
+
+	it("la considère indisponible sur une erreur serveur ou sans réponse", async () => {
+		fetchSimule.mockResolvedValueOnce(new Response(null, { status: 503 }))
+		await expect(apiJoignable(2000)).resolves.toBe(false)
+
+		fetchSimule.mockRejectedValueOnce(new TypeError("fetch failed"))
+		await expect(apiJoignable(2000)).resolves.toBe(false)
 	})
 })

@@ -30,6 +30,9 @@ export const DUREE_CONNEXION_SECONDES = 10 * 60
 /** Adresse de retour du fournisseur OIDC après la connexion (déclarée dans le client Keycloak). */
 export const CHEMIN_RAPPEL_OIDC = "/api/auth/callback/keycloak"
 
+/** Délai maximal d'un contrôle de la sonde de disponibilité (API, fournisseur OIDC), en millisecondes. */
+export const DELAI_SONDE_MS = 2000
+
 /** Durée pendant laquelle le navigateur impose le HTTPS (en-tête HSTS), en secondes (1 an). */
 export const DUREE_HSTS_SECONDES = 365 * 24 * 60 * 60
 
