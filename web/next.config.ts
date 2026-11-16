@@ -3,6 +3,8 @@ import type { NextConfig } from "next"
 import { EN_TETES_FIXES } from "./src/lib/securite/en-tetes-fixes"
 
 const nextConfig: NextConfig = {
+	// Serveur Node autonome (.next/standalone) avec les seules dépendances utiles : image légère
+	output: "standalone",
 	cacheComponents: true,
 	partialPrefetching: true,
 	poweredByHeader: false,

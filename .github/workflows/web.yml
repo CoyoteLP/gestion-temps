@@ -1,4 +1,5 @@
-# Intégration continue du front-end web (web/) : lint, format, types, tests unitaires et build.
+# Intégration continue du front-end web (web/) : lint, format, types, tests unitaires, build et
+# image conteneur (construite et démarrée, jamais publiée).
 # Ne se déclenche que si web/ (ou ce fichier) change ; ci.yml, lui, s'exécute toujours, pour que la
 # vérification obligatoire « Build et tests » soit présente sur chaque pull request.
 name: Front web
@@ -26,7 +27,7 @@ jobs:
   build:
     name: Front web
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Récupérer le code
@@ -54,18 +55,23 @@ jobs:
       - name: Tests
         run: npm test
 
-      # Secret aléatoire propre à chaque exécution, masqué dans les logs : aucun secret versionné
-      - name: Générer un secret de build
-        run: |
-          secret=$(openssl rand -base64 32)
-          echo "::add-mask::$secret"
-          echo "SESSION_SECRET=$secret" >> "$GITHUB_ENV"
-
-      # Variables factices : le build ne contacte ni Keycloak ni l'API
+      # Aucune variable d'environnement au build : toutes sont lues au démarrage du serveur
       - name: Build
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: '1'
-          OIDC_CLIENT_ID: gestion-temps-web
-          OIDC_ISSUER_URI: http://localhost:8180/realms/gestion-temps
-          API_URL: http://localhost:8080
+
+      # Image du Dockerfile, démarrée puis interrogée (sonde de vivacité) ; la publication reste
+      # manuelle, depuis le tag de la version (docs/DEPLOIEMENT.md)
+      - name: Image conteneur
+        run: |
+          docker build -t gestion-temps-web:ci .
+          secret=$(openssl rand -base64 32)
+          echo "::add-mask::$secret"
+          docker run -d --name front -p 3000:3000 -e SESSION_SECRET="$secret" gestion-temps-web:ci
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/sante; then exit 0; fi
+            sleep 1
+          done
+          docker logs front
+          exit 1

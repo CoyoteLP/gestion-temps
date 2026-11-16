@@ -6,8 +6,11 @@ import { expirationProche, rafraichirJeton } from "@/lib/auth/jeton"
 import { PAGE_CONNEXION } from "@/lib/constantes"
 import { EN_TETE_NONCE, enTeteHsts, genererNonce, politiqueContenu } from "@/lib/securite/en-tetes"
 
-/** Accessibles sans session : la page de connexion et le retour du fournisseur OIDC. */
-const CHEMINS_PUBLICS = /^\/(?:connexion|api\/auth)(?:\/|$)/
+/**
+ * Accessibles sans session : la page de connexion, le retour du fournisseur OIDC et les sondes de
+ * santé (interrogées par l'orchestrateur).
+ */
+const CHEMINS_PUBLICS = /^\/(?:connexion|api\/auth|api\/sante)(?:\/|$)/
 
 /**
  * Pour chaque requête : un nonce et la politique de sécurité du contenu (CSP) qui l'autorise,

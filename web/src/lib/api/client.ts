@@ -117,6 +117,26 @@ export function construireUrl(chemin: string, parametres: Record<string, Paramet
 	return url.toString()
 }
 
+/**
+ * Sonde de disponibilité : l'API répond-elle ? Requête sans jeton (aucune donnée lue) ; toute
+ * réponse inférieure à 500, 401 compris, prouve que l'API tourne et joint sa base.
+ *
+ * @param delaiMs délai maximal d'attente
+ * @returns vrai si l'API a répondu dans le délai sans erreur serveur
+ */
+export async function apiJoignable(delaiMs: number): Promise<boolean> {
+	try {
+		const reponse = await fetch(construireUrl("/api/projets"), {
+			headers: { Accept: "application/json" },
+			cache: "no-store",
+			signal: AbortSignal.timeout(delaiMs),
+		})
+		return reponse.status < 500
+	} catch {
+		return false
+	}
+}
+
 /** L'enveloppe JSON de la réponse, ou null si le corps n'en est pas une (proxy, page HTML…). */
 async function lireEnveloppe<T>(reponse: Response): Promise<ApiResponse<T> | null> {
 	try {

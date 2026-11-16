@@ -122,15 +122,22 @@ describe("en-têtes de sécurité du proxy", () => {
 		expect(reponse.cookies.getAll().some(({ value }) => value)).toBe(true)
 	})
 
-	it.each(["/connexion", "/connexion?erreur=expiree", "/api/auth/callback/keycloak?code=x"])(
-		"sert %s sans session, avec la CSP",
-		async (chemin) => {
-			const reponse = await proxy(await requete(chemin))
+	it.each([
+		"/connexion",
+		"/connexion?erreur=expiree",
+		"/api/auth/callback/keycloak?code=x",
+		"/api/sante",
+		"/api/sante/disponibilite",
+	])("sert %s sans session, avec la CSP", async (chemin) => {
+		const reponse = await proxy(await requete(chemin))
 
-			expect(reponse.headers.get("location")).toBeNull()
-			expect(nonceDe(reponse)).toBeTruthy()
-		},
-	)
+		expect(reponse.headers.get("location")).toBeNull()
+		expect(nonceDe(reponse)).toBeTruthy()
+	})
+
+	it("protège une adresse qui commence seulement comme une sonde", async () => {
+		expect((await proxy(await requete("/api/santes"))).headers.get("location")).toContain("/connexion")
+	})
 
 	it("pose aussi la CSP sur la redirection vers la connexion", async () => {
 		const reponse = await proxy(await requete("/connexions-actives"))

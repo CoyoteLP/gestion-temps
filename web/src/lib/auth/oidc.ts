@@ -39,6 +39,29 @@ async function chargerConfiguration(): Promise<client.Configuration> {
 	)
 }
 
+/**
+ * Sonde de disponibilité : le document de découverte du fournisseur OIDC répond-il ? Lu à chaque
+ * appel (la configuration mémorisée ne dit pas si le fournisseur répond encore).
+ *
+ * @param delaiMs délai maximal d'attente
+ * @returns vrai si le fournisseur a répondu 200 dans le délai
+ */
+export async function fournisseurJoignable(delaiMs: number): Promise<boolean> {
+	const emetteur = process.env.OIDC_ISSUER_URI?.replace(/\/$/, "")
+	if (!emetteur) {
+		return false
+	}
+	try {
+		const reponse = await fetch(`${emetteur}/.well-known/openid-configuration`, {
+			cache: "no-store",
+			signal: AbortSignal.timeout(delaiMs),
+		})
+		return reponse.ok
+	} catch {
+		return false
+	}
+}
+
 /** Réinitialise la configuration mémorisée (tests uniquement). */
 export function oublierConfigurationOidc(): void {
 	configuration = undefined
