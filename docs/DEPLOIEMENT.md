@@ -95,10 +95,10 @@ Le Keycloak de `docker/keycloak` est réservé au développement (mots de passe 
 L'image est construite depuis le tag de la version, avec les buildpacks Paketo (aucun Dockerfile) :
 
 ```bash
-git checkout v1.0.0
+git checkout v1.1.0
 ./mvnw spring-boot:build-image -DskipTests \
-    -Dspring-boot.build-image.imageName=<registre>/gestion-temps:1.0.0
-docker push <registre>/gestion-temps:1.0.0
+    -Dspring-boot.build-image.imageName=<registre>/gestion-temps:1.1.0
+docker push <registre>/gestion-temps:1.1.0
 ```
 
 L'image démarre en profil `prod` dans le fuseau `Europe/Paris`, sous un utilisateur non root. La
@@ -215,7 +215,7 @@ Exemple Kubernetes :
 ```yaml
 containers:
   - name: gestion-temps
-    image: <registre>/gestion-temps:1.0.0
+    image: <registre>/gestion-temps:1.1.0
     ports:
       - { name: http, containerPort: 8080 }
       - { name: gestion, containerPort: 8081 }
