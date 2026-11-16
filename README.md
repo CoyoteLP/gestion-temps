@@ -298,12 +298,12 @@ déclare le client public `gestion-temps-web` (Authorization Code + PKCE) ; apr�
 
 ```bash
 cd web
-cp .env.example .env.local      # puis renseigner AUTH_SECRET (voir ci-dessous)
+cp .env.example .env.local      # puis renseigner SESSION_SECRET (voir ci-dessous)
 npm install
 npm run dev                     # http://localhost:3000
 ```
 
-`AUTH_SECRET` chiffre le cookie de session : une valeur aléatoire propre à chaque poste, générée par
+`SESSION_SECRET` chiffre le cookie de session : une valeur aléatoire propre à chaque poste, générée par
 `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Sous PowerShell, si
 `npm` est refusé (« l'exécution de scripts est désactivée »), autoriser les scripts locaux une fois :
 `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`.
@@ -439,5 +439,5 @@ com.lirox.gestiontemps
 ```
 
 Front-end (`web/src`) : `app/` (pages), `components/` (dont `ui/`, composants shadcn/ui),
-`lib/api/` (client de l'API), `lib/auth/` (session et jetons), `auth.ts` et `proxy.ts`
+`lib/api/` (client de l'API), `lib/auth/` (connexion OIDC, session et jetons), `proxy.ts`
 (authentification et protection des pages).

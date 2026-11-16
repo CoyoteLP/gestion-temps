@@ -1,17 +1,27 @@
 /**
- * Messages affichés sur la page de connexion selon le code `error` qu'y passe Auth.js. Auth.js ne
- * transmet que des codes génériques : `Configuration` regroupe toute erreur côté serveur
- * (fournisseur injoignable, vérification PKCE ou `state` expirée, configuration incorrecte).
+ * Codes d'erreur passés à la page de connexion (`/connexion?erreur=…`) par la connexion et le
+ * retour du fournisseur. Aucun détail technique dans l'URL : un code, traduit en message ici.
  */
+export const CODES_ERREUR_CONNEXION = {
+	/** Fournisseur injoignable, configuration incorrecte, échange du code refusé. */
+	fournisseur: "fournisseur",
+	/** Connexion en cours introuvable ou expirée (plus de 10 minutes, autre navigateur, `state` faux). */
+	expiree: "expiree",
+	/** L'utilisateur ou le fournisseur a refusé l'accès. */
+	refus: "refus",
+} as const
+
 const MESSAGES_ERREUR_CONNEXION: Record<string, string> = {
-	Configuration: "Le service de connexion ne répond pas. Réessayez dans quelques instants.",
-	AccessDenied: "L'accès vous a été refusé.",
+	[CODES_ERREUR_CONNEXION.fournisseur]:
+		"Le service de connexion ne répond pas. Réessayez dans quelques instants.",
+	[CODES_ERREUR_CONNEXION.expiree]: "La connexion a expiré ou a été interrompue. Veuillez recommencer.",
+	[CODES_ERREUR_CONNEXION.refus]: "L'accès vous a été refusé.",
 }
 
 const MESSAGE_ERREUR_CONNEXION_PAR_DEFAUT = "La connexion a échoué. Veuillez réessayer."
 
 /**
- * @param code paramètre `error` de la page de connexion
+ * @param code paramètre `erreur` de la page de connexion
  * @returns le message à afficher, ou null s'il n'y a pas d'erreur
  */
 export function messageErreurConnexion(code: string | string[] | undefined): string | null {

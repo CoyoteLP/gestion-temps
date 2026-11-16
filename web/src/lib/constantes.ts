@@ -3,11 +3,32 @@
 /** Rôle administrateur dans la revendication des rôles du jeton (même valeur que l'API). */
 export const ROLE_ADMIN = "ADMIN"
 
-/** Revendication du jeton d'accès portant les rôles, par défaut (`AUTH_ROLES_CLAIM`). */
+/** Revendication du jeton d'accès portant les rôles, par défaut (`OIDC_ROLES_CLAIM`). */
 export const REVENDICATION_ROLES_PAR_DEFAUT = "roles"
 
 /** Le jeton d'accès est renouvelé quand il lui reste moins de ce délai de validité (secondes). */
 export const MARGE_RENOUVELLEMENT_JETON_SECONDES = 60
+
+/**
+ * Nom du cookie de session chiffré (préfixé `__Secure-` en HTTPS). Il porte les jetons : réparti
+ * sur plusieurs cookies (`.0`, `.1`…) quand il dépasse la taille d'un cookie.
+ */
+export const NOM_COOKIE_SESSION = "gestion-temps.session"
+
+/**
+ * Durée de vie maximale de la session, en secondes (30 jours). En pratique, elle prend fin plus tôt,
+ * quand le fournisseur refuse de renouveler le jeton (session expirée ou fermée chez lui).
+ */
+export const DUREE_SESSION_SECONDES = 30 * 24 * 60 * 60
+
+/** Nom du cookie chiffré qui garde, pendant la connexion, le vérificateur PKCE et le `state`. */
+export const NOM_COOKIE_CONNEXION = "gestion-temps.connexion"
+
+/** Durée de validité d'une connexion en cours chez le fournisseur, en secondes (10 minutes). */
+export const DUREE_CONNEXION_SECONDES = 10 * 60
+
+/** Adresse de retour du fournisseur OIDC après la connexion (déclarée dans le client Keycloak). */
+export const CHEMIN_RAPPEL_OIDC = "/api/auth/callback/keycloak"
 
 /** Nombre d'éléments par page des listes (l'API accepte 100 au plus). */
 export const TAILLE_PAGE = 20
@@ -51,7 +72,7 @@ export const LONGUEUR_MAX_DESCRIPTION = 1000
  */
 export const PROMPT_INSCRIPTION = "create"
 
-/** Console de compte du fournisseur (mot de passe, email), relative à `AUTH_KEYCLOAK_ISSUER`. */
+/** Console de compte du fournisseur (mot de passe, email), relative à `OIDC_ISSUER_URI`. */
 export const CHEMIN_CONSOLE_COMPTE = "/account"
 
 /** Fuseau horaire de référence pour la date du jour (même valeur que l'API). */

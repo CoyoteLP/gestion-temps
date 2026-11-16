@@ -59,13 +59,13 @@ jobs:
         run: |
           secret=$(openssl rand -base64 32)
           echo "::add-mask::$secret"
-          echo "AUTH_SECRET=$secret" >> "$GITHUB_ENV"
+          echo "SESSION_SECRET=$secret" >> "$GITHUB_ENV"
 
       # Variables factices : le build ne contacte ni Keycloak ni l'API
       - name: Build
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: '1'
-          AUTH_KEYCLOAK_ID: gestion-temps-web
-          AUTH_KEYCLOAK_ISSUER: http://localhost:8180/realms/gestion-temps
+          OIDC_CLIENT_ID: gestion-temps-web
+          OIDC_ISSUER_URI: http://localhost:8180/realms/gestion-temps
           API_URL: http://localhost:8080
