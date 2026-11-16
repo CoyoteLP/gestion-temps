@@ -136,6 +136,14 @@ src/
     du composant `async` ; les autres reçoivent la page « introuvable », comme pour une adresse
     inconnue.
 - Redirection après connexion : chemin relatif de l'application uniquement (`cheminDeRetour`).
+- **En-têtes de sécurité** : le proxy pose une CSP à nonce propre à chaque requête (scripts
+  autorisés seulement avec le nonce, `'strict-dynamic'`), HSTS en HTTPS ; les en-têtes fixes sont
+  dans `next.config.ts` (`src/lib/securite/`). Conséquences :
+  - toutes les pages sont rendues à la requête (`instant = false` dans le layout racine) ;
+  - aucun script en ligne écrit à la main ; un script tiers (`next/script`) reçoit le nonce lu par
+    `headers().get("x-nonce")` (voir le layout racine et `FournisseurTheme`) ;
+  - une nouvelle origine (image, police, API appelée du navigateur) s'ajoute à la CSP
+    (`politiqueContenu`), avec son test.
 - Aucune entrée utilisateur ni donnée de l'API injectée en HTML brut (`dangerouslySetInnerHTML`
   interdit) ; React échappe le texte.
 

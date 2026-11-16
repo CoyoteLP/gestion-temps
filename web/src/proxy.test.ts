@@ -95,6 +95,60 @@ describe("proxy", () => {
 	})
 })
 
+describe("en-têtes de sécurité du proxy", () => {
+	const nonceDe = (reponse: NextResponse) =>
+		/'nonce-([^']+)'/.exec(reponse.headers.get("content-security-policy") ?? "")?.[1]
+
+	it("pose une CSP avec un nonce propre à chaque requête, transmise au rendu avec le nonce", async () => {
+		const premiere = await proxy(await requete("/projets", session()))
+		const seconde = await proxy(await requete("/projets", session()))
+
+		const nonce = nonceDe(premiere)
+		expect(nonce).toBeTruthy()
+		expect(nonceDe(seconde)).not.toBe(nonce)
+		// En-têtes de la requête transmise au rendu (Next.js y lit le nonce)
+		expect(premiere.headers.get("x-middleware-request-x-nonce")).toBe(nonce)
+		expect(premiere.headers.get("x-middleware-request-content-security-policy")).toContain(
+			`'nonce-${nonce}'`,
+		)
+	})
+
+	it("garde les cookies renouvelés sur la réponse transmise au rendu", async () => {
+		rafraichirSimule.mockResolvedValue(session({ accessToken: "jeton-2" }))
+
+		const reponse = await proxy(await requete("/projets", session({ expiresAt: maintenant() + 10 })))
+
+		expect(nonceDe(reponse)).toBeTruthy()
+		expect(reponse.cookies.getAll().some(({ value }) => value)).toBe(true)
+	})
+
+	it.each(["/connexion", "/connexion?erreur=expiree", "/api/auth/callback/keycloak?code=x"])(
+		"sert %s sans session, avec la CSP",
+		async (chemin) => {
+			const reponse = await proxy(await requete(chemin))
+
+			expect(reponse.headers.get("location")).toBeNull()
+			expect(nonceDe(reponse)).toBeTruthy()
+		},
+	)
+
+	it("pose aussi la CSP sur la redirection vers la connexion", async () => {
+		const reponse = await proxy(await requete("/connexions-actives"))
+
+		expect(reponse.headers.get("location")).toContain("/connexion?retour=")
+		expect(nonceDe(reponse)).toBeTruthy()
+	})
+
+	it("impose le HTTPS (HSTS) quand l'application est en https, jamais en HTTP local", async () => {
+		expect((await proxy(await requete("/connexion"))).headers.get("strict-transport-security")).toBeNull()
+
+		vi.stubEnv("APP_URL", "https://temps.exemple.fr")
+		expect((await proxy(await requete("/connexion"))).headers.get("strict-transport-security")).toBe(
+			"max-age=31536000",
+		)
+	})
+})
+
 /** Requête portant les cookies posés par une réponse du proxy. */
 async function requeteAvec(reponse: NextResponse): Promise<NextRequest> {
 	const entete = reponse.cookies
@@ -112,26 +166,21 @@ describe("config.matcher du proxy", () => {
 	it.each([
 		"/",
 		"/projets",
-		"/projets?page=2",
 		"/profil",
+		"/connexion",
 		"/connexions-actives",
-		"/connexion-admin",
-		"/api/authentification",
+		"/api/auth/callback/keycloak",
 		"/api/projets",
+		"/_next/staticx",
 		"/favicon.ico.html",
-	])("protège %s", (chemin) => {
-		expect(motif.test(chemin.split("?")[0])).toBe(true)
+	])("s'applique à %s (CSP, et session hors connexion)", (chemin) => {
+		expect(motif.test(chemin)).toBe(true)
 	})
 
-	it.each([
-		"/connexion",
-		"/connexion/",
-		"/api/auth",
-		"/api/auth/callback/keycloak",
-		"/_next/static/chunks/app.js",
-		"/_next/image",
-		"/favicon.ico",
-	])("laisse passer sans session %s", (chemin) => {
-		expect(motif.test(chemin)).toBe(false)
-	})
+	it.each(["/_next/static/chunks/app.js", "/_next/image", "/favicon.ico"])(
+		"ne s'applique pas au fichier statique %s",
+		(chemin) => {
+			expect(motif.test(chemin)).toBe(false)
+		},
+	)
 })

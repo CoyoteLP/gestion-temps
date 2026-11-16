@@ -1,8 +1,8 @@
 # Plan : lot F5 — préparer le front à la production
 
-> **État (2026-11-16)** : plan validé. **F5a** implémenté sur `feature/f5a-authentification-oidc`
-> (non commité) : `web/` lint, format, types, build et 619 tests verts ; `web:review` faite et
-> corrigée ; reste le parcours de bout en bout par l'utilisateur.
+> **État (2026-11-16)** : plan validé. **F5a** fusionné (PR #34). **F5b** validé et implémenté sur
+> `feature/f5b-en-tetes-securite` (non commité) ; contrôlé sur le build de production : en-têtes
+> présents, tous les scripts servis portent le nonce de la requête.
 
 Décisions de l'utilisateur (2026-11-16) :
 - **quatre PR** : F5a authentification, F5b en-têtes de sécurité, F5c image et guide de déploiement,
@@ -78,9 +78,67 @@ l'origine n'y est jamais déduite des en-têtes `Host` / `X-Forwarded-*` (revue 
   après expiration du jeton (durée de vie courte sur le Keycloak de dev), déconnexion, compte
   administrateur.
 
-## F5b — En-têtes de sécurité (à détailler à son tour)
-`Content-Security-Policy` à nonce posée par le proxy (guide Next.js), `frame-ancestors 'none'`,
-`Referrer-Policy`, `X-Content-Type-Options`, `Permissions-Policy`.
+## F5b — En-têtes de sécurité
+
+Décisions de l'utilisateur (2026-11-16) : **CSP à nonce strict** pour les scripts ; **HSTS posé par
+le front** en production.
+
+### Politique de sécurité du contenu (CSP)
+Un nonce aléatoire par requête, généré par le proxy, posé dans l'en-tête `Content-Security-Policy`
+de la réponse **et** de la requête transmise au rendu : Next.js l'applique alors lui-même à ses
+scripts (guide Next.js « Content Security Policy »).
+
+```
+default-src 'self';
+script-src 'self' 'nonce-…' 'strict-dynamic';      (+ 'unsafe-eval' en dev seulement, pour React)
+style-src 'self' 'unsafe-inline';
+img-src 'self' blob: data:;
+font-src 'self';
+connect-src 'self';
+object-src 'none';
+base-uri 'self';
+form-action 'self' <origine du fournisseur OIDC>;
+frame-ancestors 'none';
+upgrade-insecure-requests;                          (en HTTPS seulement)
+```
+
+- **Scripts** : seuls ceux qui portent le nonce de la requête s'exécutent ; un script injecté (XSS)
+  est bloqué.
+- **Styles** : `'unsafe-inline'` reste nécessaire (attributs `style` rendus par les composants, dont
+  la barre latérale) ; risque bien plus faible que pour les scripts.
+- **`form-action`** : l'origine du fournisseur (`OIDC_ISSUER_URI`) y figure, sinon le navigateur
+  bloquerait la redirection vers Keycloak d'un formulaire de connexion envoyé sans JavaScript.
+- **Rendu à la requête** : un nonce ne peut pas figurer dans une page prérendue au build. Le layout
+  racine lit le nonce (`headers()`) et exporte `instant = false` : toutes les pages sont rendues à
+  la requête (perte de la coquille prérendue ; sans enjeu de cache, chaque page dépend de
+  l'utilisateur connecté).
+- **Script du thème** (`next-themes`, évite le flash de couleur) : reçoit le nonce.
+- **Proxy** : il s'applique désormais aussi à `/connexion` et au retour du fournisseur (CSP), sans
+  y exiger de session ; seuls les fichiers statiques (`_next/static`, `_next/image`, favicon) en
+  restent exclus.
+
+### Autres en-têtes
+- Fixes, pour toutes les réponses (`next.config.ts`, `headers()`) : `X-Content-Type-Options:
+  nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY` (anciens
+  navigateurs ; `frame-ancestors` pour les autres), `Permissions-Policy` (caméra, micro,
+  géolocalisation, paiement, USB désactivés), `Cross-Origin-Opener-Policy: same-origin`.
+- **HSTS** (`Strict-Transport-Security: max-age=31536000`, sans `includeSubDomains` ni `preload`) :
+  posé par le proxy, à l'exécution, seulement si `APP_URL` est en `https` (jamais en dev). Il ne
+  peut pas aller dans `next.config.ts`, évalué au build, avant que `APP_URL` ne soit connue.
+
+### Code et tests
+- `lib/securite/en-tetes.ts` : construction de la CSP (nonce, dev, origine du fournisseur), en-tête
+  HSTS ; tests unitaires (directives, pas de `'unsafe-inline'` ni `'unsafe-eval'` pour les scripts
+  en production, `form-action` avec le fournisseur, HSTS seulement en https).
+- `proxy.ts` : nonce et en-têtes sur chaque réponse (redirections comprises) ; tests (CSP présente,
+  nonce différent à chaque requête, transmis au rendu, `/connexion` sans redirection).
+- Layout racine : `instant = false`, nonce passé au fournisseur de thème.
+- En-têtes fixes dans `lib/securite/en-tetes-fixes.ts`, module sans dépendance : `next.config.ts`
+  est compilé à part et n'y résout pas l'alias `@/`.
+- Réalisé : `/projets/[id]` reste en prérendu partiel (coquille générique du paramètre), mais Next.js
+  y applique le nonce à la requête : vérifié sur le HTML servi (42 scripts sur 42 avec le nonce).
+- Vérification manuelle sur le build de production : en-têtes présents (`curl -I`), aucune erreur
+  CSP dans la console du navigateur sur les pages principales (connexion, saisies, équipe, projets).
 
 ## F5c — Image et déploiement (à détailler à son tour)
 Sortie `standalone`, image conteneur du front, guide `docs/DEPLOIEMENT.md` (front public derrière le
