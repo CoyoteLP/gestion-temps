@@ -1,5 +1,9 @@
 import { defineConfig, devices } from "@playwright/test"
 
+// Code du projet propre à l'exécution : fixé une fois par le processus principal, hérité par les
+// processus de test (qui relisent cette configuration sans le changer)
+process.env.E2E_CODE_PROJET ??= `E2E-${Date.now() % 100_000_000}`
+
 /**
  * Tests de bout en bout contre la pile de docker/e2e/compose.yaml (front sur 3100, Keycloak sur
  * 8280, API sur 8090), à démarrer avant : voir le README, « Tests de bout en bout ».

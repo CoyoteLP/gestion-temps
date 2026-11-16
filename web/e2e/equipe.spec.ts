@@ -1,4 +1,16 @@
-import { COMPTES, expect, fichierSession, lireDonnees, lundiDe, test } from "./outils"
+import {
+	codeProjet,
+	COMPTES,
+	expect,
+	fichierSession,
+	idDuProjet,
+	joursSaisis,
+	lundiDe,
+	moisPrecedent,
+	TACHE,
+	test,
+	TOTAL_HEURES,
+} from "./outils"
 
 /**
  * Clôture d'un mois par le responsable, lecture seule pour le contributeur, réouverture par
@@ -11,12 +23,11 @@ test.describe.serial("équipe et clôture du mois", () => {
 		test.use({ storageState: fichierSession("jdupont") })
 
 		test("le responsable consulte le récapitulatif du mois et le clôture", async ({ page }) => {
-			const { projetId, moisPrecedent, totalHeures } = lireDonnees()
-			await page.goto(`/equipe?projet=${projetId}&mois=${moisPrecedent}`)
+			await page.goto(`/equipe?projet=${await idDuProjet()}&mois=${moisPrecedent()}`)
 
 			await expect(
 				page.getByRole("row", { name: new RegExp(`^${nomPmartin} Contributeur`) }),
-			).toContainText(`${totalHeures} h`)
+			).toContainText(`${TOTAL_HEURES} h`)
 			await expect(page.getByText("Ouvert", { exact: true })).toBeVisible()
 
 			await page.getByRole("button", { name: "Clôturer ce mois" }).click()
@@ -31,13 +42,12 @@ test.describe.serial("équipe et clôture du mois", () => {
 		test.use({ storageState: fichierSession("pmartin") })
 
 		test("le contributeur voit ses saisies du mois clôturé en lecture seule", async ({ page }) => {
-			const { codeProjet, tache, joursSaisis } = lireDonnees()
-			await page.goto(`/saisies?semaine=${lundiDe(joursSaisis[0])}`)
+			await page.goto(`/saisies?semaine=${lundiDe(joursSaisis()[0])}`)
 
 			await expect(page.getByText("Mois clôturé : saisie en lecture seule").first()).toBeVisible()
 			await expect(
 				page.getByRole("button", {
-					name: new RegExp(`^Modifier la saisie ${codeProjet} · ${tache}`),
+					name: new RegExp(`^Modifier la saisie ${codeProjet()} · ${TACHE}`),
 				}),
 			).toHaveCount(0)
 		})
@@ -47,17 +57,17 @@ test.describe.serial("équipe et clôture du mois", () => {
 		test.use({ storageState: fichierSession("admin") })
 
 		test("l'administrateur rouvre le mois depuis la synthèse des projets", async ({ page }) => {
-			const { codeProjet, moisPrecedent, totalHeures } = lireDonnees()
-			await page.goto(`/equipe?mois=${moisPrecedent}&synthese.projet=${codeProjet}`)
+			const code = codeProjet()
+			await page.goto(`/equipe?mois=${moisPrecedent()}&synthese.projet=${code}`)
 
 			const ligne = page
 				.getByRole("region", { name: "Synthèse des projets" })
 				// Ligne du projet (pas celle des filtres, où le code est saisi)
-				.getByRole("row", { name: new RegExp(`^${codeProjet} · `) })
+				.getByRole("row", { name: new RegExp(`^${code} · `) })
 			await expect(ligne).toContainText("Clôturé")
-			await expect(ligne).toContainText(`${totalHeures} h`)
+			await expect(ligne).toContainText(`${TOTAL_HEURES} h`)
 
-			await ligne.getByRole("button", { name: new RegExp(`^Rouvrir .* pour ${codeProjet}$`) }).click()
+			await ligne.getByRole("button", { name: new RegExp(`^Rouvrir .* pour ${code}$`) }).click()
 			await page.getByRole("alertdialog").getByRole("button", { name: "Rouvrir" }).click()
 
 			await expect(page.getByText(/^Mois rouvert : /)).toBeVisible()

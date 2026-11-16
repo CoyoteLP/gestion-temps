@@ -1,9 +1,10 @@
-import { aujourdhui, expect, fichierSession, lireDonnees, test } from "./outils"
+import { aujourdhui, codeProjet as lireCodeProjet, expect, fichierSession, TACHE, test } from "./outils"
 
 test.use({ storageState: fichierSession("pmartin") })
 
 test("saisit, corrige et supprime du temps, avec les messages de la journée", async ({ page }) => {
-	const { codeProjet, tache } = lireDonnees()
+	const codeProjet = lireCodeProjet()
+	const tache = TACHE
 	// Jour du mois en cours : jamais dans un mois clôturé (seul un mois terminé se clôture)
 	const jour = aujourdhui()
 	const saisie = new RegExp(`${codeProjet} · ${tache} du`)

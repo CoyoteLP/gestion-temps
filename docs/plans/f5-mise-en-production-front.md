@@ -251,6 +251,10 @@ dev peut rester lancée) :
   dans `src/instrumentation-client.ts`, exécuté par Next.js avant le code de l'application.
 - La préparation efface les saisies de `pmartin` et rouvre les clôtures du mois précédent laissées
   par une exécution interrompue : la pile se relance sans réinitialisation.
+- Aucune donnée de test écrite sur disque (alerte CodeQL « Network data written to file » sur la
+  PR #37) : le code du projet de l'exécution est fixé par `playwright.config.ts` et hérité par les
+  processus de test (`E2E_CODE_PROJET`), le mois et les saisies sont recalculés, l'identifiant du
+  projet est relu par l'API en mémoire.
 
 ## Points validés (2026-11-16)
 1. Cookie **réparti** sur plusieurs cookies (`iron-session`, option `chunk`).
