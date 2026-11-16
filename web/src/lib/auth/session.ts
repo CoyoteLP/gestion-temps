@@ -1,14 +1,15 @@
 import "server-only"
 
-import { getToken, type JWT } from "next-auth/jwt"
-import { headers } from "next/headers"
+import { getIronSession } from "iron-session"
+import { cookies } from "next/headers"
 import { notFound, redirect } from "next/navigation"
+import { connection } from "next/server"
 import { cache } from "react"
 
-import { auth, unstable_update } from "@/auth"
 import { PAGE_CONNEXION } from "@/lib/constantes"
 
-import { expirationProche, type MiseAJourJetons, rafraichirJeton } from "./jeton"
+import { type DonneesSession, optionsSession, sessionOuverte } from "./cookies"
+import { rafraichirJeton } from "./jeton"
 
 /** Utilisateur connecté, tel que l'interface l'affiche (aucun jeton). */
 export type UtilisateurConnecte = {
@@ -18,51 +19,41 @@ export type UtilisateurConnecte = {
 }
 
 /**
- * Lit le contenu chiffré du cookie de session de la requête en cours (nom sécurisé `__Secure-`
- * en HTTPS, nom simple en HTTP local).
+ * Lit la session de la requête en cours (cookie chiffré, éventuellement réparti sur plusieurs
+ * cookies). Le proxy l'a déjà renouvelée si le jeton expirait : elle est lue telle quelle.
  *
- * @returns le contenu de la session, ou null sans session valide
+ * @returns la session, ou null s'il n'y en a pas (absente, expirée ou illisible)
  */
-export async function lireJeton(): Promise<JWT | null> {
-	const requete = { headers: await headers() }
-	const secret = process.env.AUTH_SECRET
-	return (
-		(await getToken({ req: requete, secret, secureCookie: true })) ??
-		(await getToken({ req: requete, secret, secureCookie: false }))
-	)
-}
+export const lireSession = cache(async (): Promise<DonneesSession | null> => {
+	// iron-session lit l'heure (expiration du cookie) : valeur propre à la requête, jamais prérendue
+	await connection()
+	const session = await getIronSession<DonneesSession>(await cookies(), optionsSession())
+	return sessionOuverte(session) ? session : null
+})
 
 /**
- * Jeton d'accès à transmettre à l'API, renouvelé s'il expire (cas d'une requête qui suit une
- * longue inactivité : le proxy a déjà renouvelé le cookie, mais la requête porte encore l'ancien).
- * Lu une seule fois par rendu. Sans session valide, redirige vers la page de connexion.
+ * Jeton d'accès à transmettre à l'API. Il n'est jamais renouvelé ici : le proxy l'a fait avant que
+ * la requête n'arrive à la page. Sans session valide, redirige vers la page de connexion.
  *
  * @returns le jeton d'accès
  */
 export const jetonAcces = cache(async (): Promise<string> => {
-	let jeton = await lireJeton()
-	if (jeton && !jeton.erreur && expirationProche(jeton)) {
-		jeton = await rafraichirJeton(jeton)
-	}
-	if (!jeton?.accessToken || jeton.erreur) {
+	const session = await lireSession()
+	if (!session || session.expiresAt * 1000 <= Date.now()) {
 		redirect(PAGE_CONNEXION)
 	}
-	return jeton.accessToken
+	return session.accessToken
 })
 
 /**
  * @returns l'utilisateur connecté ; sans session valide, redirige vers la page de connexion
  */
 export const utilisateurCourant = cache(async (): Promise<UtilisateurConnecte> => {
-	const session = await auth()
-	if (!session?.user || session.erreur) {
+	const session = await lireSession()
+	if (!session) {
 		redirect(PAGE_CONNEXION)
 	}
-	return {
-		nom: session.user.name ?? session.user.email ?? "",
-		email: session.user.email ?? "",
-		estAdmin: session.estAdmin,
-	}
+	return { nom: session.nom, email: session.email, estAdmin: session.estAdmin }
 })
 
 /**
@@ -85,25 +76,15 @@ export async function exigerAdmin(): Promise<void> {
  * @returns le nouveau jeton d'accès, ou null sans session ou si le fournisseur refuse
  */
 export async function jetonAccesRenouvele(): Promise<string | null> {
-	const jeton = await lireJeton()
-	if (!jeton || jeton.erreur) {
+	const session = await getIronSession<DonneesSession>(await cookies(), optionsSession())
+	if (!sessionOuverte(session)) {
 		return null
 	}
-	const renouvele = await rafraichirJeton(jeton)
-	if (renouvele.erreur || !renouvele.accessToken || !renouvele.expiresAt) {
+	const renouvelee = await rafraichirJeton(session)
+	if (!renouvelee) {
 		return null
 	}
-	const donnees: MiseAJourJetons = {
-		jetonsRenouveles: {
-			accessToken: renouvele.accessToken,
-			expiresAt: renouvele.expiresAt,
-			estAdmin: renouvele.estAdmin ?? false,
-			refreshToken: renouvele.refreshToken,
-			idToken: renouvele.idToken,
-		},
-	}
-	// Données internes au serveur (unstable_update n'émet aucune requête réseau) ; son type
-	// n'accepte que des champs de session, d'où la conversion
-	await unstable_update(donnees as Parameters<typeof unstable_update>[0])
-	return renouvele.accessToken
+	Object.assign(session, renouvelee)
+	await session.save()
+	return renouvelee.accessToken
 }

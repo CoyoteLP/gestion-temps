@@ -43,21 +43,21 @@ src/
       (compte-actif)/   pages qui appellent l'API : réservées à un compte actif ou administrateur
       profil/           toujours accessible, même sans fiche active
     connexion/          seule page publique
-    api/auth/           routes d'Auth.js
+    api/auth/callback/  retour du fournisseur OIDC après la connexion
   components/           composants de l'application
     ui/                 composants shadcn/ui : générés, jamais modifiés à la main
   hooks/                hooks React
   lib/
     actions/            état renvoyé par les Server Actions (EtatAction) et fonctions communes
     api/                accès à l'API : apiFetch, ApiError, types, une fonction par appel
-    auth/               session, jetons, actions de connexion, d'inscription et de déconnexion
+    auth/               connexion OIDC (openid-client), cookie de session (iron-session), jetons,
+                        actions de connexion, d'inscription et de déconnexion
     compte/             fiche de l'utilisateur connecté : enregistrement, profil (schéma, actions)
     projets/, taches/,  une ressource par dossier : schéma de formulaire (schema-*.ts), Server
     membres/,           Actions (actions.ts), lectures composées côté serveur
     utilisateurs/
     constantes.ts       valeurs partagées
-  auth.ts               configuration d'Auth.js (Keycloak, Authorization Code + PKCE)
-  proxy.ts              protection des routes (ex-middleware) et renouvellement du jeton
+  proxy.ts              protection des routes (ex-middleware) et seul renouvellement du jeton
 ```
 
 - **Server Components par défaut** ; `"use client"` seulement pour l'interactivité (état, effets,
@@ -72,7 +72,7 @@ src/
 - **Compte actif** : sans fiche active, l'API refuse tout (403) sauf `/api/utilisateurs/moi`. Toute
   page qui lit l'API se place dans le groupe `(compte-actif)`, dont le layout (`GardeCompte`)
   affiche à la place l'état de l'inscription (« en attente de validation », « à finaliser »).
-  La fiche est créée à la connexion (événement `signIn` d'Auth.js, `enregistrerALaConnexion`).
+  La fiche est créée à la connexion (retour du fournisseur, `enregistrerALaConnexion`).
 - Composant client qui lit l'URL (`usePathname`, `useSearchParams`) : sous une route à paramètre
   dynamique (`/projets/[id]`), il doit être sous `<Suspense>`, sinon le build échoue (voir
   `EntreeNavigation`, prérendue sans mise en évidence).
@@ -117,8 +117,13 @@ src/
 ## Sécurité
 
 - **Le jeton ne quitte jamais le serveur** : il vit dans le cookie de session chiffré `httpOnly`
-  d'Auth.js. La session exposée aux composants (`auth()`, callback `session`) n'en contient aucun ;
-  ne jamais passer un jeton en prop à un Client Component, ni le journaliser.
+  (`iron-session`, clé `SESSION_SECRET`, réparti sur plusieurs cookies au besoin). Les composants
+  ne reçoivent que `utilisateurCourant()` (nom, email, rôle administrateur) ; ne jamais passer un
+  jeton en prop à un Client Component, ni le journaliser.
+- **Authentification** : Authorization Code + PKCE avec `openid-client` (`state`, `nonce`, jeton
+  d'identité vérifié au retour). Le jeton d'accès n'est renouvelé que dans le proxy, qui transmet
+  le jeton neuf à la page ; `jetonAcces()` le lit sans le renouveler. Seule exception :
+  `jetonAccesRenouvele()` dans une Server Action (finaliser l'inscription).
 - Tout module qui lit un jeton ou appelle l'API importe `server-only`.
 - Variables `NEXT_PUBLIC_*` : jamais de secret ni d'URL interne (elles sont copiées dans le
   JavaScript du navigateur). Toute nouvelle variable est ajoutée, sans secret, à `web/.env.example`.

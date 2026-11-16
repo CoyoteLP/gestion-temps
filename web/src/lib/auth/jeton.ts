@@ -1,6 +1,6 @@
 import "server-only"
 
-import type { JWT } from "next-auth/jwt"
+import * as client from "openid-client"
 
 import {
 	MARGE_RENOUVELLEMENT_JETON_SECONDES,
@@ -8,15 +8,8 @@ import {
 	ROLE_ADMIN,
 } from "@/lib/constantes"
 
+import type { DonneesSession } from "./cookies"
 import { configurationOidc } from "./oidc"
-
-/** Réponse du point de terminaison `token` du fournisseur OIDC. */
-type ReponseJeton = {
-	access_token: string
-	expires_in: number
-	refresh_token?: string
-	id_token?: string
-}
 
 /**
  * Rôles portés par un jeton d'accès, lus dans la revendication indiquée (chemin pointé accepté,
@@ -49,106 +42,79 @@ export function rolesDuJeton(jetonAcces: string, revendication: string): string[
 
 /**
  * @param jetonAcces jeton d'accès JWT
- * @returns vrai si le jeton porte le rôle administrateur
+ * @returns vrai si le jeton porte le rôle administrateur (revendication `OIDC_ROLES_CLAIM`)
  */
 export function estAdministrateur(jetonAcces: string): boolean {
-	const revendication = process.env.AUTH_ROLES_CLAIM || REVENDICATION_ROLES_PAR_DEFAUT
+	const revendication = process.env.OIDC_ROLES_CLAIM || REVENDICATION_ROLES_PAR_DEFAUT
 	return rolesDuJeton(jetonAcces, revendication).includes(ROLE_ADMIN)
 }
 
 /**
- * @param jeton       contenu de la session
- * @param maintenant  instant de référence, en millisecondes
+ * @param session    session (son expiration)
+ * @param maintenant instant de référence, en millisecondes
  * @returns vrai si le jeton d'accès est expiré ou expire dans moins de
  *          {@link MARGE_RENOUVELLEMENT_JETON_SECONDES}
  */
-export function expirationProche(jeton: JWT, maintenant: number = Date.now()): boolean {
-	if (!jeton.expiresAt) {
+export function expirationProche(
+	session: Readonly<{ expiresAt?: number }>,
+	maintenant: number = Date.now(),
+): boolean {
+	if (!session.expiresAt) {
 		return true
 	}
-	return (jeton.expiresAt - MARGE_RENOUVELLEMENT_JETON_SECONDES) * 1000 <= maintenant
+	return (session.expiresAt - MARGE_RENOUVELLEMENT_JETON_SECONDES) * 1000 <= maintenant
+}
+
+/**
+ * Session à enregistrer d'après une réponse du point de terminaison `token` du fournisseur
+ * (connexion ou renouvellement). Le nom et l'email viennent du jeton d'identité, à défaut de la
+ * session précédente.
+ *
+ * @param reponse    réponse du fournisseur (jetons validés par `openid-client`)
+ * @param precedente session en cours, lors d'un renouvellement
+ * @param maintenant instant de référence, en millisecondes
+ * @returns le contenu du cookie de session
+ */
+export function sessionDepuisJetons(
+	reponse: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
+	precedente?: DonneesSession,
+	maintenant: number = Date.now(),
+): DonneesSession {
+	const identite = reponse.claims()
+	const texte = (valeur: unknown) => (typeof valeur === "string" && valeur ? valeur : undefined)
+	const email = texte(identite?.email) ?? precedente?.email ?? ""
+	return {
+		accessToken: reponse.access_token,
+		refreshToken: reponse.refresh_token ?? precedente?.refreshToken,
+		idToken: reponse.id_token ?? precedente?.idToken,
+		expiresAt: Math.floor(maintenant / 1000) + (reponse.expires_in ?? 0),
+		estAdmin: estAdministrateur(reponse.access_token),
+		nom: texte(identite?.name) ?? texte(identite?.preferred_username) ?? precedente?.nom ?? email,
+		email,
+	}
 }
 
 /**
  * Renouvelle le jeton d'accès avec le refresh token. En cas d'échec (session fermée chez le
- * fournisseur, refresh token expiré), la session est marquée `erreur` : l'utilisateur sera renvoyé
- * vers la page de connexion.
+ * fournisseur, refresh token expiré, fournisseur injoignable), renvoie null : l'utilisateur sera
+ * renvoyé vers la page de connexion.
  *
- * @param jeton contenu de la session
- * @returns la session avec les nouveaux jetons, ou marquée en erreur
+ * @param session session en cours
+ * @returns la session avec les nouveaux jetons, ou null si le renouvellement est impossible
  */
-export async function rafraichirJeton(jeton: JWT): Promise<JWT> {
-	const enErreur: JWT = { ...jeton, erreur: "RenouvellementImpossible" }
-	if (!jeton.refreshToken) {
-		return enErreur
+export async function rafraichirJeton(session: DonneesSession): Promise<DonneesSession | null> {
+	if (!session.refreshToken) {
+		return null
 	}
 	try {
-		const { token_endpoint } = await configurationOidc()
-		const corps = new URLSearchParams({
-			grant_type: "refresh_token",
-			refresh_token: jeton.refreshToken,
-			client_id: process.env.AUTH_KEYCLOAK_ID ?? "",
-		})
-		if (process.env.AUTH_KEYCLOAK_SECRET) {
-			corps.set("client_secret", process.env.AUTH_KEYCLOAK_SECRET)
-		}
-		const reponse = await fetch(token_endpoint, { method: "POST", body: corps, cache: "no-store" })
-		if (!reponse.ok) {
-			console.warn(`Renouvellement du jeton refusé par le fournisseur OIDC (HTTP ${reponse.status})`)
-			return enErreur
-		}
-		const nouveau = (await reponse.json()) as ReponseJeton
-		return {
-			...jeton,
-			accessToken: nouveau.access_token,
-			expiresAt: Math.floor(Date.now() / 1000) + nouveau.expires_in,
-			refreshToken: nouveau.refresh_token ?? jeton.refreshToken,
-			idToken: nouveau.id_token ?? jeton.idToken,
-			estAdmin: estAdministrateur(nouveau.access_token),
-			erreur: undefined,
-		}
+		const reponse = await client.refreshTokenGrant(await configurationOidc(), session.refreshToken)
+		return sessionDepuisJetons(reponse, session)
 	} catch (erreur) {
+		// Ni jeton ni message du fournisseur dans le log : le type d'erreur seulement
 		console.warn(
 			"Renouvellement du jeton impossible :",
 			erreur instanceof Error ? erreur.name : "inconnue",
 		)
-		return enErreur
-	}
-}
-
-/** Jetons obtenus par un renouvellement forcé, à enregistrer dans le cookie de session. */
-export type JetonsRenouveles = Required<Pick<JWT, "accessToken" | "expiresAt" | "estAdmin">> &
-	Pick<JWT, "refreshToken" | "idToken">
-
-/** Données passées à `unstable_update` pour enregistrer des jetons renouvelés (côté serveur). */
-export type MiseAJourJetons = { jetonsRenouveles: JetonsRenouveles }
-
-/**
- * Lit les jetons renouvelés dans les données d'une mise à jour de session (`trigger: "update"` du
- * callback `jwt`). Toute autre donnée est ignorée : seule une Server Action, côté serveur, peut
- * demander cette mise à jour (`jetonAccesRenouvele`).
- *
- * @param donnees données passées à `unstable_update`
- * @returns les jetons à enregistrer, ou null si les données n'en contiennent pas de valides
- */
-export function jetonsRenouvelesDe(donnees: unknown): JetonsRenouveles | null {
-	if (!donnees || typeof donnees !== "object" || !("jetonsRenouveles" in donnees)) {
 		return null
-	}
-	const jetons = (donnees as MiseAJourJetons).jetonsRenouveles
-	if (
-		!jetons ||
-		typeof jetons.accessToken !== "string" ||
-		typeof jetons.expiresAt !== "number" ||
-		typeof jetons.estAdmin !== "boolean"
-	) {
-		return null
-	}
-	return {
-		accessToken: jetons.accessToken,
-		expiresAt: jetons.expiresAt,
-		estAdmin: jetons.estAdmin,
-		refreshToken: typeof jetons.refreshToken === "string" ? jetons.refreshToken : undefined,
-		idToken: typeof jetons.idToken === "string" ? jetons.idToken : undefined,
 	}
 }

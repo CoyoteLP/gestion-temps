@@ -17,7 +17,8 @@ if (!("ResizeObserver" in globalThis)) {
 		disconnect() {}
 	}
 }
-if (!window.matchMedia) {
+// Absent sous l'environnement node (tests du code serveur) : rien à substituer
+if (typeof window !== "undefined" && !window.matchMedia) {
 	window.matchMedia = (requete: string) =>
 		({
 			matches: false,

@@ -1,21 +1,20 @@
 import "server-only"
 
-/** Points de terminaison du fournisseur OIDC utilisés en dehors d'Auth.js. */
-export type ConfigurationOidc = {
-	token_endpoint: string
-	end_session_endpoint?: string
-}
+import * as client from "openid-client"
 
-let configuration: Promise<ConfigurationOidc> | undefined
+let configuration: Promise<client.Configuration> | undefined
 
 /**
- * Lit (une fois par processus) le document de découverte du fournisseur OIDC
- * (`AUTH_KEYCLOAK_ISSUER/.well-known/openid-configuration`), sans rien supposer de Keycloak.
+ * Configuration du client OIDC (`openid-client`), lue une fois par processus depuis le document de
+ * découverte du fournisseur (`OIDC_ISSUER_URI`). Client public (PKCE seul) par défaut, confidentiel
+ * si `OIDC_CLIENT_SECRET` est défini. Un émetteur en `http` n'est accepté que pour le développement
+ * local (Keycloak de dev).
  *
- * @returns les points de terminaison du fournisseur
- * @throws Error si le document est inaccessible ; un nouvel essai aura lieu au prochain appel
+ * @returns la configuration du client
+ * @throws Error si une variable manque ou si le fournisseur est injoignable ; un nouvel essai aura
+ *         lieu au prochain appel
  */
-export function configurationOidc(): Promise<ConfigurationOidc> {
+export function configurationOidc(): Promise<client.Configuration> {
 	configuration ??= chargerConfiguration().catch((erreur: unknown) => {
 		configuration = undefined
 		throw erreur
@@ -23,16 +22,21 @@ export function configurationOidc(): Promise<ConfigurationOidc> {
 	return configuration
 }
 
-async function chargerConfiguration(): Promise<ConfigurationOidc> {
-	const emetteur = process.env.AUTH_KEYCLOAK_ISSUER?.replace(/\/$/, "")
-	if (!emetteur) {
-		throw new Error("AUTH_KEYCLOAK_ISSUER n'est pas défini")
+async function chargerConfiguration(): Promise<client.Configuration> {
+	const emetteur = process.env.OIDC_ISSUER_URI?.replace(/\/$/, "")
+	const identifiant = process.env.OIDC_CLIENT_ID
+	if (!emetteur || !identifiant) {
+		throw new Error("OIDC_ISSUER_URI et OIDC_CLIENT_ID doivent être définis")
 	}
-	const reponse = await fetch(`${emetteur}/.well-known/openid-configuration`, { cache: "no-store" })
-	if (!reponse.ok) {
-		throw new Error(`Découverte OIDC impossible (HTTP ${reponse.status})`)
-	}
-	return (await reponse.json()) as ConfigurationOidc
+	const secret = process.env.OIDC_CLIENT_SECRET
+	const url = new URL(emetteur)
+	return client.discovery(
+		url,
+		identifiant,
+		undefined,
+		secret ? client.ClientSecretPost(secret) : client.None(),
+		url.protocol === "http:" ? { execute: [client.allowInsecureRequests] } : undefined,
+	)
 }
 
 /** Réinitialise la configuration mémorisée (tests uniquement). */

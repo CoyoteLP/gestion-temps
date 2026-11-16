@@ -64,6 +64,11 @@ Déclarer l'API auprès du fournisseur :
    du front ouvre directement le formulaire d'inscription si le fournisseur prend en charge le
    paramètre standard `prompt=create` (Keycloak 26.1 ou plus récent) ; sinon, il affiche la page de
    connexion, d'où l'on peut encore s'inscrire.
+5. **Renouvellement des jetons du front** : laisser **désactivée** la révocation des jetons de
+   renouvellement déjà utilisés (Keycloak : *Realm settings* → *Tokens* → *Revoke Refresh Token*
+   à *Off*, réglage par défaut). Le front renouvelle le jeton d'accès quand il expire ; deux
+   requêtes simultanées d'un même utilisateur peuvent alors présenter le même jeton de
+   renouvellement, et la révocation déconnecterait l'utilisateur à la seconde.
 
 Un compte authentifié sans fiche active (inconnu, en attente, désactivé) ne lit rien d'autre que
 sa propre fiche (403), sauf s'il porte le rôle administrateur.

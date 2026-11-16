@@ -6,7 +6,7 @@ import { AlerteErreur } from "@/components/alerte-erreur"
 import { BoutonsConnexion } from "@/components/boutons-connexion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { messageErreurConnexion } from "@/lib/auth/erreurs-connexion"
-import { cheminDepuisUrl } from "@/lib/auth/redirection"
+import { cheminDeRetour } from "@/lib/auth/redirection"
 
 export const metadata: Metadata = { title: "Connexion" }
 
@@ -33,14 +33,17 @@ export default function PageConnexion({ searchParams }: PageProps<"/connexion">)
 	)
 }
 
-/** Lit l'URL (page demandée, erreur renvoyée par Auth.js) : rendu à la requête. */
+/**
+ * Lit l'URL (page demandée `retour`, posée par le proxy ; code `erreur` de la connexion) : rendu à
+ * la requête.
+ */
 async function FormulaireConnexion({ searchParams }: Pick<PageProps<"/connexion">, "searchParams">) {
-	const { callbackUrl, error } = await searchParams
-	const erreur = messageErreurConnexion(error)
+	const { retour, erreur: code } = await searchParams
+	const erreur = messageErreurConnexion(code)
 	return (
 		<div className="flex flex-col gap-4">
 			{erreur && <AlerteErreur titre="Connexion impossible" message={erreur} />}
-			<BoutonsConnexion retour={cheminDepuisUrl(callbackUrl)} />
+			<BoutonsConnexion retour={typeof retour === "string" ? cheminDeRetour(retour) : ""} />
 		</div>
 	)
 }
