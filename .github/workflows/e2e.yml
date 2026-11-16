@@ -1,0 +1,81 @@
+# Tests de bout en bout (web/e2e, Playwright) contre la pile complète de docker/e2e : MariaDB,
+# Keycloak, API et front, construits depuis le code de la pull request. Non obligatoire pour fusionner
+# (vérification « Build et tests » seulement) : rapport Playwright en artefact en cas d'échec.
+name: Tests E2E
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'web/**'
+      - 'src/**'
+      - 'pom.xml'
+      - 'docker/e2e/**'
+      - 'docker/keycloak/**'
+      - '.github/workflows/e2e.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Tests E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v7
+
+      - name: Installer Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Construire le jar de l'API
+        run: ./mvnw -B -q package -DskipTests
+
+      - name: Installer Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Installer les dépendances du front et Chromium
+        working-directory: web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Démarrer la pile de test
+        run: docker compose -f docker/e2e/compose.yaml up -d --build --wait
+
+      - name: Tests de bout en bout
+        working-directory: web
+        run: npm run e2e
+
+      - name: Journaux de la pile
+        if: failure()
+        run: docker compose -f docker/e2e/compose.yaml logs --no-color > e2e-pile.log
+
+      - name: Publier le rapport
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rapport-e2e
+          path: |
+            web/playwright-report/
+            web/test-results/
+            e2e-pile.log
+          retention-days: 7
+
+      - name: Arrêter la pile
+        if: always()
+        run: docker compose -f docker/e2e/compose.yaml down -v

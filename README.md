@@ -368,6 +368,24 @@ Vérifications :
 par le workflow « Front web » sur chaque pull request qui modifie `web/`). Sous Windows, lancer
 Vitest depuis un chemin en `C:\…` (majuscule), sinon aucun test n'est trouvé.
 
+**Tests de bout en bout** (Playwright, `web/e2e/`) : connexion et droits, saisie de la semaine,
+équipe et clôture, sans erreur CSP ni JavaScript, contre la pile complète de `docker/e2e` (MariaDB,
+Keycloak, API en profil `prod`, image du front), sur des ports distincts de ceux de dev (front
+3100, Keycloak 8280, API 8090) :
+
+```bash
+./mvnw package -DskipTests                                      # jar de l'API
+docker compose -f docker/e2e/compose.yaml up -d --build --wait  # pile de test
+cd web
+npx playwright install chromium                                 # première fois
+npm run e2e
+docker compose -f ../docker/e2e/compose.yaml down -v            # arrêter, tout effacer
+```
+
+Les tests préparent leurs données par l'API et peuvent être relancés sans réinitialiser la pile.
+Le workflow « Tests E2E » les lance sur les pull requests qui modifient `web/` ou l'API (non
+obligatoire pour fusionner ; rapport en artefact en cas d'échec).
+
 Image conteneur du front : `docker build -t gestion-temps-web web` (`web/Dockerfile`) ; variables,
 sondes de santé (`/api/sante`, `/api/sante/disponibilite`) et mise en production dans le
 [guide de déploiement](docs/DEPLOIEMENT.md).

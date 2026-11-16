@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Tests de bout en bout (Playwright) : sessions, données et rapports locaux
+/e2e/.etat/
+/playwright-report/
+/test-results/
