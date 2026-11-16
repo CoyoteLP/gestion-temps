@@ -30,9 +30,10 @@ import lombok.RequiredArgsConstructor;
  * Clôture mensuelle des projets : une fois un mois clôturé pour un projet, ses saisies de ce mois
  * ne peuvent plus être créées, modifiées ni supprimées.
  * <p>
- * Seul un mois terminé peut être clôturé, par un administrateur ou un membre du projet (MANAGER,
- * BACKUP) ; seul un administrateur peut rouvrir un mois (suppression, réservée par
- * {@code SecurityConfig}). Une clôture verrouille le projet en écriture et chaque écriture de
+ * Seul un mois terminé peut être clôturé, par un administrateur ou un responsable du projet (MANAGER,
+ * BACKUP ; pas un contributeur) ; seul un administrateur peut rouvrir un mois (suppression, réservée
+ * par {@code SecurityConfig}). Les clôtures d'un projet ne sont visibles que de ses membres et de
+ * l'administrateur. Une clôture verrouille le projet en écriture et chaque écriture de
  * saisie le verrouille en lecture : une saisie ne peut pas s'intercaler pendant la clôture.
  */
 @Service
@@ -42,7 +43,7 @@ public class ClotureService {
 
 	private final ClotureRepository clotureRepository;
 	private final ProjetService projetService;
-	private final MembreProjetService membreProjetService;
+	private final AccesProjetService accesProjetService;
 	private final UtilisateurCourantService utilisateurCourantService;
 	private final Clock clock;
 
@@ -50,22 +51,35 @@ public class ClotureService {
 	 * @param projetId   filtre optionnel sur le projet
 	 * @param mois       filtre optionnel sur le mois
 	 * @param pagination page demandée
-	 * @return une page de clôtures, du mois le plus récent au plus ancien
+	 * @return une page de clôtures, du mois le plus récent au plus ancien ; pour un collaborateur,
+	 *         celles des projets dont il est membre
+	 * @throws AccesRefuseException si un collaborateur filtre sur un projet dont il n'est pas membre
 	 */
 	public PageResponse<ClotureResponse> search(Long projetId, YearMonth mois, PaginationRequest pagination) {
+		// Filtre sur un projet : l'accès vérifié suffit ; sinon, restriction aux projets de l'appelant
+		Long utilisateurRestreint = null;
+		if (projetId != null) {
+			accesProjetService.verifierAcces(projetId);
+		}
+		else {
+			utilisateurRestreint = accesProjetService.utilisateurRestreint();
+		}
 		LocalDate premierJour = mois == null ? null : mois.atDay(1);
 		Sort tri = Sort.by(Sort.Order.desc("mois"), Sort.Order.asc("projet.id"));
-		return PageResponse.from(clotureRepository.search(projetId, premierJour, pagination.versPageRequest(tri)),
-				ClotureResponse::from);
+		return PageResponse.from(clotureRepository.search(projetId, premierJour, utilisateurRestreint,
+				pagination.versPageRequest(tri)), ClotureResponse::from);
 	}
 
 	/**
 	 * @param id identifiant de la clôture
 	 * @return la clôture
 	 * @throws ResourceNotFoundException si la clôture n'existe pas
+	 * @throws AccesRefuseException      si l'appelant n'est ni administrateur ni membre du projet
 	 */
 	public ClotureResponse findById(Long id) {
-		return ClotureResponse.from(getCloture(id));
+		Cloture cloture = getCloture(id);
+		accesProjetService.verifierAcces(cloture.getProjet().getId());
+		return ClotureResponse.from(cloture);
 	}
 
 	/**
@@ -75,7 +89,8 @@ public class ClotureService {
 	 * @return la clôture créée
 	 * @throws BusinessRuleException      si le mois n'est pas terminé
 	 * @throws ResourceNotFoundException  si le projet n'existe pas
-	 * @throws AccesRefuseException       si l'appelant n'est ni administrateur ni membre du projet
+	 * @throws AccesRefuseException       si l'appelant n'est ni administrateur, ni responsable ou
+	 *                                    suppléant du projet
 	 * @throws DuplicateResourceException si le mois est déjà clôturé pour ce projet
 	 */
 	@Transactional
@@ -83,8 +98,9 @@ public class ClotureService {
 		verifierMoisTermine(request.mois());
 		Projet projet = projetService.getProjetVerrouille(request.projetId());
 		if (!utilisateurCourantService.estAdmin()
-				&& !membreProjetService.estMembre(projet.getId(), utilisateurCourantService.get().getId())) {
-			throw new AccesRefuseException("Seuls un administrateur ou un responsable du projet peuvent le clôturer");
+				&& !accesProjetService.estResponsable(projet.getId(), utilisateurCourantService.get().getId())) {
+			throw new AccesRefuseException(
+					"Seuls un administrateur, un responsable ou un suppléant du projet peuvent le clôturer");
 		}
 		if (clotureRepository.existsByProjetIdAndMois(projet.getId(), request.mois().atDay(1))) {
 			throw new DuplicateResourceException(

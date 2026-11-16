@@ -1,0 +1,24 @@
+# Contexte de construction de l'image : le strict nécessaire, jamais de secret
+node_modules
+.next
+coverage
+*.tsbuildinfo
+next-env.d.ts
+
+# Aucun fichier d'environnement (secrets de poste) ; seul le modèle est conservé
+.env*
+!.env.example
+
+# Fichiers de développement
+.claude
+CLAUDE.md
+AGENTS.md
+Dockerfile
+.dockerignore
+**/*.test.ts
+e2e
+playwright.config.ts
+playwright-report
+test-results
+**/*.test.tsx
+src/test

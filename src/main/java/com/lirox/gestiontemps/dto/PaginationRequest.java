@@ -21,11 +21,29 @@ public record PaginationRequest(
 		@Min(value = 1, message = "doit être supérieur ou égal à 1") Integer taille) {
 
 	/**
-	 * @param tri ordre des éléments, imposé par le service (le client ne choisit pas le tri)
+	 * Page triée selon la colonne choisie par le client, parmi celles admises par la ressource ;
+	 * l'identifiant départage les égalités, pour une pagination stable.
+	 *
+	 * @param tri  colonne choisie, ou null pour l'ordre par défaut (identifiant croissant)
+	 * @param sens sens choisi, ou null pour l'ordre croissant
+	 * @return la page correspondante pour Spring Data (numérotée à partir de 0)
+	 */
+	public PageRequest versPageRequest(ColonneTri tri, SensTri sens) {
+		Sort parIdentifiant = Sort.by(Sort.Direction.ASC, "id");
+		if (tri == null) {
+			return versPageRequest(parIdentifiant);
+		}
+		Sort.Direction direction = sens == null ? Sort.Direction.ASC : sens.direction();
+		return versPageRequest(tri.versSort(direction).and(parIdentifiant));
+	}
+
+	/**
+	 * @param tri ordre des éléments, imposé par le service
 	 * @return la page correspondante pour Spring Data (numérotée à partir de 0)
 	 */
 	public PageRequest versPageRequest(Sort tri) {
-		int numero = page == null ? 0 : page - 1;
+		// Garde redondante avec @Min, qui s'applique avant : protège un appel sans validation
+		int numero = page == null || page < 1 ? 0 : page - 1;
 		int nombre = taille == null ? Constantes.TAILLE_PAGE_PAR_DEFAUT : Math.min(taille, Constantes.TAILLE_PAGE_MAX);
 		return PageRequest.of(numero, nombre, tri);
 	}

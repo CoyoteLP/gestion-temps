@@ -1,0 +1,77 @@
+# Intégration continue du front-end web (web/) : lint, format, types, tests unitaires, build et
+# image conteneur (construite et démarrée, jamais publiée).
+# Ne se déclenche que si web/ (ou ce fichier) change ; ci.yml, lui, s'exécute toujours, pour que la
+# vérification obligatoire « Build et tests » soit présente sur chaque pull request.
+name: Front web
+
+on:
+  push:
+    branches: [main, develop, 'release/**', 'hotfix/**']
+    paths: ['web/**', '.github/workflows/web.yml']
+  pull_request:
+    branches: [main, develop]
+    paths: ['web/**', '.github/workflows/web.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  build:
+    name: Front web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v7
+
+      - name: Installer Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Types
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      # Aucune variable d'environnement au build : toutes sont lues au démarrage du serveur
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+
+      # Image du Dockerfile, démarrée puis interrogée (sonde de vivacité) ; la publication reste
+      # manuelle, depuis le tag de la version (docs/DEPLOIEMENT.md)
+      - name: Image conteneur
+        run: |
+          docker build -t gestion-temps-web:ci .
+          secret=$(openssl rand -base64 32)
+          echo "::add-mask::$secret"
+          docker run -d --name front -p 3000:3000 -e SESSION_SECRET="$secret" gestion-temps-web:ci
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/sante; then exit 0; fi
+            sleep 1
+          done
+          docker logs front
+          exit 1

@@ -1,7 +1,11 @@
 package com.lirox.gestiontemps.controller;
 
+import static com.lirox.gestiontemps.JetonsDeTest.collaborateur;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -11,6 +15,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -29,9 +36,20 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.lirox.gestiontemps.JetonsDeTest;
 import com.lirox.gestiontemps.common.Constantes;
+import com.lirox.gestiontemps.domain.Cloture;
+import com.lirox.gestiontemps.domain.MembreProjet;
 import com.lirox.gestiontemps.domain.Projet;
+import com.lirox.gestiontemps.domain.RoleProjet;
+import com.lirox.gestiontemps.domain.SaisieTemps;
+import com.lirox.gestiontemps.domain.Tache;
+import com.lirox.gestiontemps.domain.Utilisateur;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
+import com.lirox.gestiontemps.repository.ClotureRepository;
+import com.lirox.gestiontemps.repository.MembreProjetRepository;
 import com.lirox.gestiontemps.repository.ProjetRepository;
+import com.lirox.gestiontemps.repository.SaisieTempsRepository;
+import com.lirox.gestiontemps.repository.TacheRepository;
+import com.lirox.gestiontemps.repository.UtilisateurRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -45,6 +63,21 @@ class ProjetControllerTest {
 
 	@Autowired
 	private ProjetRepository projetRepository;
+
+	@Autowired
+	private UtilisateurRepository utilisateurRepository;
+
+	@Autowired
+	private MembreProjetRepository membreProjetRepository;
+
+	@Autowired
+	private TacheRepository tacheRepository;
+
+	@Autowired
+	private SaisieTempsRepository saisieTempsRepository;
+
+	@Autowired
+	private ClotureRepository clotureRepository;
 
 	@Test
 	void createRetourne201AvecLocation() throws Exception {
@@ -343,11 +376,341 @@ class ProjetControllerTest {
 				.collect(Collectors.joining(", ", "{", "}"));
 	}
 
+	// Tri et filtres de la liste (paramètres tri, sens, code, nom, actif)
+
+	@Test
+	void trieLesProjetsParNomDansLesDeuxSensPuisParIdentifiant() throws Exception {
+		Projet bravo1 = save("P1", "Bravo", null, true);
+		Projet alpha = save("P2", "alpha", null, true);
+		Projet bravo2 = save("P3", "Bravo", null, true);
+
+		mockMvc.perform(get("/api/projets").param("tri", "nom"))
+				.andExpect(jsonPath("$.data.contenu[*].code").value(contains("P2", "P1", "P3")));
+		mockMvc.perform(get("/api/projets").param("tri", "nom").param("sens", "desc"))
+				// Noms égaux : départagés par identifiant croissant, quel que soit le sens
+				.andExpect(jsonPath("$.data.contenu[*].id").value(contains(bravo1.getId().intValue(),
+						bravo2.getId().intValue(), alpha.getId().intValue())));
+	}
+
+	@Test
+	void unProjetSansDateDeDebutVientEnDernierDansLesDeuxSens() throws Exception {
+		save("SANS", "Sans date", null, true);
+		save("TOT", "Tôt", LocalDate.of(2026, 1, 1), true);
+		save("TARD", "Tard", LocalDate.of(2026, 6, 1), true);
+
+		mockMvc.perform(get("/api/projets").param("tri", "dateDebut"))
+				.andExpect(jsonPath("$.data.contenu[*].code").value(contains("TOT", "TARD", "SANS")));
+		mockMvc.perform(get("/api/projets").param("tri", "dateDebut").param("sens", "desc"))
+				.andExpect(jsonPath("$.data.contenu[*].code").value(contains("TARD", "TOT", "SANS")));
+	}
+
+	@Test
+	void filtreLeNomSansTenirCompteDeLaCasseNiDesAccents() throws Exception {
+		save("EQ", "Équipe support", null, true);
+		save("AUT", "Autre", null, true);
+
+		mockMvc.perform(get("/api/projets").param("nom", "EQUIPE"))
+				.andExpect(jsonPath("$.data.total").value(1))
+				.andExpect(jsonPath("$.data.contenu[0].code").value("EQ"));
+	}
+
+	@Test
+	void filtreCherchePourcentEtSouligneTelsQuels() throws Exception {
+		save("POUR", "Remise 100% client", null, true);
+		save("SOUL", "Projet_interne", null, true);
+		save("AUT", "Projet interne", null, true);
+
+		mockMvc.perform(get("/api/projets").param("nom", "%"))
+				.andExpect(jsonPath("$.data.contenu[*].code").value(contains("POUR")));
+		mockMvc.perform(get("/api/projets").param("nom", "t_i"))
+				.andExpect(jsonPath("$.data.contenu[*].code").value(contains("SOUL")));
+	}
+
+	@Test
+	void combineLesFiltresDeCodeEtDeStatut() throws Exception {
+		save("APP-1", "Application", null, true);
+		save("APP-2", "Application archivée", null, false);
+		save("WEB-1", "Site", null, true);
+
+		mockMvc.perform(get("/api/projets").param("code", "app").param("actif", "true"))
+				.andExpect(jsonPath("$.data.contenu[*].code").value(contains("APP-1")));
+	}
+
+	@Test
+	void unCollaborateurFiltreParmiSesProjetsSeulement() throws Exception {
+		Projet sien = save("APP-1", "Application", null, true);
+		save("APP-2", "Application voisine", null, true);
+		Utilisateur contributeur = saveMembre(sien, "cdurand@lirox.com", RoleProjet.CONTRIBUTEUR);
+
+		mockMvc.perform(get("/api/projets").param("nom", "application").with(collaborateur(contributeur)))
+				.andExpect(jsonPath("$.data.contenu[*].code").value(contains("APP-1")));
+	}
+
+	@Test
+	void refuseUneColonneDeTriInconnueEnListantLesValeursAdmises() throws Exception {
+		mockMvc.perform(get("/api/projets").param("tri", "description"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value(containsString("tri")))
+				.andExpect(jsonPath("$.message").value(containsString("code, nom, dateDebut, actif")));
+	}
+
+	@Test
+	void refuseUnSensInconnuEtUnFiltreTropLong() throws Exception {
+		mockMvc.perform(get("/api/projets").param("tri", "nom").param("sens", "haut"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value(containsString("asc, desc")));
+		mockMvc.perform(get("/api/projets").param("nom", "x".repeat(101)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value(containsString("nom")));
+	}
+
+	@Test
+	void sansTriLOrdreResteParIdentifiant() throws Exception {
+		Projet premier = save("ZZZ", "Zèbre", null, true);
+		Projet second = save("AAA", "Abeille", null, true);
+
+		mockMvc.perform(get("/api/projets"))
+				.andExpect(jsonPath("$.data.contenu[*].id")
+						.value(contains(premier.getId().intValue(), second.getId().intValue())));
+	}
+
+	private Projet save(String code, String nom, LocalDate dateDebut, boolean actif) {
+		Projet projet = new Projet();
+		projet.setCode(code);
+		projet.setNom(nom);
+		projet.setDateDebut(dateDebut);
+		projet.setActif(actif);
+		return projetRepository.save(projet);
+	}
+
 	private Projet save(String code) {
 		Projet projet = new Projet();
 		projet.setCode(code);
 		projet.setNom("Projet " + code);
 		return projetRepository.save(projet);
+	}
+
+	// Visibilité : un collaborateur ne voit que les projets dont il est membre
+
+	@Test
+	void unCollaborateurNeVoitQueLesProjetsDontIlEstMembre() throws Exception {
+		Projet sien = save("PRJ-01");
+		Projet autre = save("PRJ-02");
+		Utilisateur contributeur = saveMembre(sien, "cdurand@lirox.com", RoleProjet.CONTRIBUTEUR);
+
+		mockMvc.perform(get("/api/projets").with(collaborateur(contributeur)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.total").value(1))
+				.andExpect(jsonPath("$.data.contenu[0].code").value("PRJ-01"));
+		mockMvc.perform(get("/api/projets/{id}", sien.getId()).with(collaborateur(contributeur)))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/projets/{id}", autre.getId()).with(collaborateur(contributeur)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message").value("Vous n'êtes pas membre de ce projet"));
+		mockMvc.perform(get("/api/projets/{id}", 9999).with(collaborateur(contributeur)))
+				.andExpect(status().isNotFound());
+	}
+
+	// Rôle de l'appelant dans chaque projet (monRole)
+
+	@Test
+	void unCollaborateurVoitSonRoleDansChacunDeSesProjets() throws Exception {
+		Projet contribue = save("PRJ-01");
+		Projet dirige = save("PRJ-02");
+		Utilisateur collaborateur = saveMembre(contribue, "cdurand@lirox.com", RoleProjet.CONTRIBUTEUR);
+		ajouterMembre(dirige, collaborateur, RoleProjet.MANAGER);
+
+		mockMvc.perform(get("/api/projets").with(collaborateur(collaborateur)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.contenu[0].monRole").value("CONTRIBUTEUR"))
+				.andExpect(jsonPath("$.data.contenu[1].monRole").value("MANAGER"));
+		mockMvc.perform(get("/api/projets/{id}", dirige.getId()).with(collaborateur(collaborateur)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.monRole").value("MANAGER"));
+	}
+
+	@Test
+	void lAdministrateurNonMembreNAPasDeRole() throws Exception {
+		Projet projet = save("PRJ-01");
+		saveMembre(projet, "cdurand@lirox.com", RoleProjet.MANAGER);
+
+		mockMvc.perform(get("/api/projets"))
+				.andExpect(jsonPath("$.data.contenu[0].monRole").value(nullValue()));
+		mockMvc.perform(get("/api/projets/{id}", projet.getId()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.monRole").value(nullValue()));
+	}
+
+	@Test
+	void lAdministrateurMembreVoitSonRole() throws Exception {
+		Projet projet = save("PRJ-01");
+		save("PRJ-02");
+		Utilisateur ficheAdministrateur = new Utilisateur();
+		ficheAdministrateur.setEmail("admin@lirox.com");
+		ficheAdministrateur.setNom("Admin");
+		ficheAdministrateur.setPrenom("Alice");
+		ficheAdministrateur.setSujet(JetonsDeTest.SUJET_ADMIN);
+		utilisateurRepository.save(ficheAdministrateur);
+		ajouterMembre(projet, ficheAdministrateur, RoleProjet.BACKUP);
+
+		mockMvc.perform(get("/api/projets"))
+				.andExpect(jsonPath("$.data.total").value(2))
+				.andExpect(jsonPath("$.data.contenu[0].monRole").value("BACKUP"))
+				.andExpect(jsonPath("$.data.contenu[1].monRole").value(nullValue()));
+		mockMvc.perform(put("/api/projets/{id}", projet.getId()).contentType(MediaType.APPLICATION_JSON).content("""
+				{"code": "PRJ-01", "nom": "Projet renommé", "version": 0}
+				"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.monRole").value("BACKUP"));
+	}
+
+	@Test
+	void unCollaborateurMembreDAucunProjetNEnVoitAucun() throws Exception {
+		Projet projet = save("PRJ-01");
+		Utilisateur contributeur = saveMembre(projet, "cdurand@lirox.com", RoleProjet.CONTRIBUTEUR);
+		membreProjetRepository.deleteByUtilisateurId(contributeur.getId());
+
+		mockMvc.perform(get("/api/projets").with(collaborateur(contributeur)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.total").value(0));
+	}
+
+	@Test
+	void lAdministrateurVoitTousLesProjets() throws Exception {
+		Projet projet = save("PRJ-01");
+		save("PRJ-02");
+		saveMembre(projet, "cdurand@lirox.com", RoleProjet.MANAGER);
+
+		mockMvc.perform(get("/api/projets"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.total").value(2));
+	}
+
+	/** Collaborateur dont le compte OIDC est rattaché (sujet renseigné), membre du projet avec ce rôle. */
+	private Utilisateur saveMembre(Projet p, String email, RoleProjet role) {
+		Utilisateur u = new Utilisateur();
+		u.setEmail(email);
+		u.setNom("Durand");
+		u.setPrenom("Claire");
+		u.setSujet("sujet-" + email);
+		utilisateurRepository.save(u);
+		ajouterMembre(p, u, role);
+		return u;
+	}
+
+	private void ajouterMembre(Projet p, Utilisateur u, RoleProjet role) {
+		MembreProjet membre = new MembreProjet();
+		membre.setProjet(p);
+		membre.setUtilisateur(u);
+		membre.setRole(role);
+		membreProjetRepository.save(membre);
+	}
+
+	// Synthèse mensuelle (administrateur)
+
+	@Test
+	void syntheseDuMoisTotaliseLesHeuresEtIndiqueLaCloture() throws Exception {
+		Cloture clotureA = preparerSynthese();
+
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.projets.total").value(4))
+				.andExpect(jsonPath("$.data.projets.contenu[*].code").value(contains("PJ-A", "PJ-B", "PJ-C", "PJ-D")))
+				.andExpect(jsonPath("$.data.projets.contenu[0].totalHeures").value(9.5))
+				.andExpect(jsonPath("$.data.projets.contenu[0].clotureId").value(clotureA.getId()))
+				.andExpect(jsonPath("$.data.projets.contenu[1].totalHeures").value(0))
+				.andExpect(jsonPath("$.data.projets.contenu[1].clotureId").value(nullValue()))
+				.andExpect(jsonPath("$.data.projets.contenu[2].totalHeures").value(3))
+				.andExpect(jsonPath("$.data.projets.contenu[2].actif").value(false))
+				.andExpect(jsonPath("$.data.projets.contenu[3].totalHeures").value(0))
+				.andExpect(jsonPath("$.data.projets.contenu[3].clotureId").isNumber())
+				// Total général : tous les projets, saisies d'un autre mois exclues
+				.andExpect(jsonPath("$.data.totalHeures").value(12.5));
+	}
+
+	@Test
+	void syntheseDuMoisFiltreParProjetEtParClotureAvecSonTotal() throws Exception {
+		preparerSynthese();
+
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10").param("projet", "pj-c"))
+				.andExpect(jsonPath("$.data.projets.contenu[*].code").value(contains("PJ-C")))
+				.andExpect(jsonPath("$.data.totalHeures").value(3));
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10").param("projet", "Projet D"))
+				.andExpect(jsonPath("$.data.projets.contenu[*].code").value(contains("PJ-D")));
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10").param("cloture", "true"))
+				.andExpect(jsonPath("$.data.projets.contenu[*].code").value(contains("PJ-A", "PJ-D")))
+				.andExpect(jsonPath("$.data.totalHeures").value(9.5));
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10").param("cloture", "false"))
+				.andExpect(jsonPath("$.data.projets.contenu[*].code").value(contains("PJ-B", "PJ-C")))
+				.andExpect(jsonPath("$.data.totalHeures").value(3));
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10").param("projet", "inconnu"))
+				.andExpect(jsonPath("$.data.projets.total").value(0))
+				.andExpect(jsonPath("$.data.totalHeures").value(0));
+	}
+
+	/**
+	 * Octobre 2026 : PJ-A actif clôturé (9,5 h, plus 4 h en novembre), PJ-B actif ouvert sans saisie,
+	 * PJ-C inactif avec 3 h, PJ-D inactif clôturé sans saisie, PJ-E inactif sans rien (exclu).
+	 *
+	 * @return la clôture d'octobre de PJ-A
+	 */
+	private Cloture preparerSynthese() {
+		Projet a = save("PJ-A");
+		Projet b = save("PJ-B");
+		Projet inactifAvecSaisie = save("PJ-C", "Projet C", null, false);
+		Projet inactifClos = save("PJ-D", "Projet D", null, false);
+		save("PJ-E", "Projet E", null, false);
+		Utilisateur u = saveMembre(a, "jdupont@lirox.com", RoleProjet.CONTRIBUTEUR);
+		Tache tacheA = saveTache(a);
+		saveSaisie(u, tacheA, LocalDate.of(2026, 10, 5), "7.5");
+		saveSaisie(u, tacheA, LocalDate.of(2026, 10, 31), "2");
+		saveSaisie(u, tacheA, LocalDate.of(2026, 11, 1), "4");
+		saveSaisie(u, saveTache(inactifAvecSaisie), LocalDate.of(2026, 10, 1), "3");
+		saveCloture(inactifClos, YearMonth.of(2026, 10));
+		saveCloture(b, YearMonth.of(2026, 9));
+		return saveCloture(a, YearMonth.of(2026, 10));
+	}
+
+	@Test
+	void syntheseDuMoisEstReserveeALAdministrateur() throws Exception {
+		Projet projet = save("PJ-A");
+		Utilisateur responsable = saveMembre(projet, "jdupont@lirox.com", RoleProjet.MANAGER);
+
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10").with(collaborateur(responsable)))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-10").with(anonymous()))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void syntheseDuMoisExigeUnMoisValide() throws Exception {
+		mockMvc.perform(get("/api/projets/synthese"))
+				.andExpect(status().isBadRequest());
+		mockMvc.perform(get("/api/projets/synthese").param("mois", "2026-13"))
+				.andExpect(status().isBadRequest());
+	}
+
+	private Tache saveTache(Projet p) {
+		Tache tache = new Tache();
+		tache.setProjet(p);
+		tache.setLibelle("Développement");
+		return tacheRepository.save(tache);
+	}
+
+	private void saveSaisie(Utilisateur u, Tache tache, LocalDate jour, String duree) {
+		SaisieTemps saisie = new SaisieTemps();
+		saisie.setUtilisateur(u);
+		saisie.setTache(tache);
+		saisie.setJour(jour);
+		saisie.setDuree(new BigDecimal(duree));
+		saisieTempsRepository.save(saisie);
+	}
+
+	private Cloture saveCloture(Projet p, YearMonth mois) {
+		Cloture cloture = new Cloture();
+		cloture.setProjet(p);
+		cloture.setMois(mois.atDay(1));
+		return clotureRepository.save(cloture);
 	}
 
 }

@@ -1,16 +1,28 @@
 package com.lirox.gestiontemps.service;
 
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.lirox.gestiontemps.common.MotifRecherche;
 import com.lirox.gestiontemps.domain.Projet;
+import com.lirox.gestiontemps.domain.RoleProjet;
 import com.lirox.gestiontemps.dto.PageResponse;
 import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.ProjetRequest;
 import com.lirox.gestiontemps.dto.ProjetResponse;
+import com.lirox.gestiontemps.dto.RechercheProjetsRequest;
+import com.lirox.gestiontemps.dto.RechercheSyntheseRequest;
+import com.lirox.gestiontemps.dto.SyntheseMoisResponse;
+import com.lirox.gestiontemps.exception.AccesRefuseException;
 import com.lirox.gestiontemps.exception.DuplicateResourceException;
 import com.lirox.gestiontemps.exception.ModificationConcurrenteException;
 import com.lirox.gestiontemps.exception.ResourceInUseException;
@@ -24,6 +36,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * Gestion des projets : unicité du code et interdiction de supprimer un projet qui a des tâches.
+ * Un collaborateur ne lit que les projets dont il est membre ({@link AccesProjetService}).
  */
 @Service
 @RequiredArgsConstructor
@@ -34,23 +47,58 @@ public class ProjetService {
 	private final TacheRepository tacheRepository;
 	private final MembreProjetRepository membreProjetRepository;
 	private final ClotureRepository clotureRepository;
+	private final AccesProjetService accesProjetService;
 
 	/**
+	 * @param recherche  filtres (code, nom, statut) et tri choisis parmi les colonnes admises
 	 * @param pagination page demandée
-	 * @return une page de projets, par identifiant croissant
+	 * @return une page de projets (identifiant croissant sans tri choisi) : tous pour un
+	 *         administrateur, ceux dont il est membre pour un collaborateur ; chacun avec le rôle de
+	 *         l'appelant ({@code monRole}, lu en une seule requête pour la page)
 	 */
-	public PageResponse<ProjetResponse> findAll(PaginationRequest pagination) {
-		return PageResponse.from(projetRepository.findAll(pagination.versPageRequest(Sort.by("id"))),
-				ProjetResponse::from);
+	public PageResponse<ProjetResponse> findAll(RechercheProjetsRequest recherche, PaginationRequest pagination) {
+		PageRequest page = pagination.versPageRequest(recherche.tri(), recherche.sens());
+		Long moi = accesProjetService.idFicheCourante();
+		Long restreint = accesProjetService.estAdmin() ? null : moi;
+		Page<Projet> projets = projetRepository.search(MotifRecherche.contient(recherche.code()),
+				MotifRecherche.contient(recherche.nom()), recherche.actif(), restreint, page);
+		Map<Long, RoleProjet> roles = moi == null ? Map.of()
+				: accesProjetService.rolesDans(projets.map(Projet::getId).getContent(), moi);
+		return PageResponse.from(projets, projet -> ProjetResponse.from(projet, roles.get(projet.getId())));
+	}
+
+	/**
+	 * Synthèse d'un mois par projet (réservée à l'administrateur par {@code SecurityConfig}) : total
+	 * des heures saisies et clôture du mois, en une requête pour la page, et total général des projets
+	 * filtrés en une seconde requête.
+	 *
+	 * @param mois       mois de la synthèse
+	 * @param recherche  filtres : texte du code ou du nom, mois clôturé ou ouvert
+	 * @param pagination page demandée
+	 * @return une page de synthèses, triées par code (projets actifs, et projets inactifs qui ont des
+	 *         saisies ou une clôture ce mois-là), et le total général
+	 */
+	public SyntheseMoisResponse syntheseDuMois(YearMonth mois, RechercheSyntheseRequest recherche,
+			PaginationRequest pagination) {
+		LocalDate debut = mois.atDay(1);
+		LocalDate fin = mois.atEndOfMonth();
+		String motif = MotifRecherche.contient(recherche.projet());
+		PageRequest page = pagination.versPageRequest(Sort.by("code", "id"));
+		return new SyntheseMoisResponse(
+				PageResponse.from(projetRepository.syntheseDuMois(debut, fin, motif, recherche.cloture(), page),
+						Function.identity()),
+				projetRepository.totalDuMois(debut, fin, motif, recherche.cloture()));
 	}
 
 	/**
 	 * @param id identifiant du projet
-	 * @return le projet
+	 * @return le projet, avec le rôle de l'appelant ({@code monRole})
 	 * @throws ResourceNotFoundException si le projet n'existe pas
+	 * @throws AccesRefuseException      si l'appelant n'est ni administrateur ni membre du projet
 	 */
 	public ProjetResponse findById(Long id) {
-		return ProjetResponse.from(getProjet(id));
+		Projet projet = getProjet(id);
+		return ProjetResponse.from(projet, accesProjetService.roleVerifie(projet.getId()));
 	}
 
 	/**
@@ -85,7 +133,7 @@ public class ProjetService {
 		}
 		apply(request, projet);
 		projetRepository.flush();
-		return ProjetResponse.from(projet);
+		return ProjetResponse.from(projet, accesProjetService.roleVerifie(projet.getId()));
 	}
 
 	/**

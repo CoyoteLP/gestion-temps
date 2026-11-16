@@ -45,16 +45,20 @@ public interface ClotureRepository extends JpaRepository<Cloture, Long> {
 	 * Recherche avec filtres optionnels (un paramètre null n'est pas filtré), paginée et triée selon
 	 * {@code page}.
 	 *
-	 * @param projetId clôtures de ce projet
-	 * @param mois     clôtures de ce mois (premier jour)
-	 * @param page     page et tri demandés
+	 * @param projetId      clôtures de ce projet
+	 * @param mois          clôtures de ce mois (premier jour)
+	 * @param utilisateurId clôtures des projets dont cet utilisateur est membre
+	 * @param page          page et tri demandés
 	 * @return la page de clôtures correspondantes
 	 */
 	@Query("""
 			select c from Cloture c
 			where (:projetId is null or c.projet.id = :projetId)
 			  and (:mois is null or c.mois = :mois)
+			  and (:utilisateurId is null or exists (
+			      select m from MembreProjet m where m.projet = c.projet and m.utilisateur.id = :utilisateurId))
 			""")
-	Page<Cloture> search(@Param("projetId") Long projetId, @Param("mois") LocalDate mois, Pageable page);
+	Page<Cloture> search(@Param("projetId") Long projetId, @Param("mois") LocalDate mois,
+			@Param("utilisateurId") Long utilisateurId, Pageable page);
 
 }

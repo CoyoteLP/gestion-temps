@@ -1,8 +1,103 @@
 # CLAUDE.md
 
-Conventions de l'équipe pour le projet **gestion-temps** : API REST de gestion du temps de travail
-(Spring Boot 4, Java 21, JPA, MariaDB). Ce fichier est versionné ; les préférences personnelles
-vont dans `CLAUDE.local.md` (non versionné).
+Conventions de l'équipe pour le projet **gestion-temps** : gestion du temps de travail, avec une
+API REST (Spring Boot 4, Java 21, JPA, MariaDB) et un front-end web (Next.js). Ce fichier est
+versionné ; les préférences personnelles vont dans `CLAUDE.local.md` (non versionné).
+
+> La partie « Backend (API Java) » ne s'applique pas sous `web/`, qui a ses propres conventions
+> dans [`web/CLAUDE.md`](web/CLAUDE.md). La partie « Commun » s'applique partout.
+
+# Commun
+
+## Dépôt
+
+Monorepo, un seul Git Flow et une seule version pour les deux applications :
+
+- racine : l'API Java (`pom.xml`, `src/`) ;
+- `web/` : le front-end Next.js, qui appelle l'API depuis son serveur (BFF) ;
+- `docker/` : environnement de dev (Keycloak) ; `docs/` : déploiement et plans.
+
+Skills du projet :
+- backend (`.claude/skills/`) : `/review [périmètre]` (revue des modifications : conventions de ce
+  fichier, sécurité, performance, sans rien modifier) et `/test [cible]` (écrit ou complète les
+  tests d'une cible puis les lance ; sans argument, lance toute la suite et diagnostique les échecs) ;
+- front-end (`web/.claude/skills/`) : `web:review` et `web:test`, mêmes rôles pour `web/`.
+
+## Git
+
+- Ne pas committer ni pousser sans demande explicite.
+- Mettre à jour le `README.md` (endpoints, règles, format) quand l'API change, ou le démarrage du front.
+
+### Branches (Git Flow)
+
+| Branche     | Créée depuis | Fusionnée dans          | Rôle                                         |
+|-------------|--------------|-------------------------|----------------------------------------------|
+| `main`      | —            | —                       | production ; chaque commit est une version taguée |
+| `develop`   | `main`       | —                       | intégration de la prochaine version          |
+| `feature/*` | `develop`    | `develop`               | une fonctionnalité                           |
+| `bugfix/*`  | `develop`    | `develop`               | correction avant mise en production          |
+| `chore/*`   | `develop`    | `develop`               | maintenance : version, dépendances, configuration |
+| `release/*` | `develop`    | `main` **et** `develop` | préparation d'une version (pas de nouveauté) |
+| `hotfix/*`  | `main`       | `main` **et** `develop` | correctif urgent en production               |
+
+- Nommage : `type/numero-description-courte` en minuscules et tirets
+  (`feature/12-saisie-sans-date`, `chore/version-0.2.0`, `release/1.0.0`, `hotfix/1.0.1-total-journalier`).
+- **Toute** modification de `main` ou `develop` passe par une pull request : GitHub l'impose à
+  tous, administrateurs compris (CI « Build et tests » verte et branche à jour), et le hook
+  `commit-msg` refuse localement les commits directs sur ces branches.
+- `feature/*`, `bugfix/*`, `chore/*` → `develop` : pull request fusionnée en **squash**, après
+  `/review`. Le titre de la pull request devient le message du commit : il suit donc le format
+  Conventional Commits.
+- `release/*` et `hotfix/*` → `main` : pull request fusionnée en **merge commit** (équivalent
+  `--no-ff`), puis tag `vX.Y.Z` sur `main` ; reporter ensuite la même branche dans `develop` par
+  une pull request en merge commit (pas de squash, pour garder l'historique commun).
+- Les branches de travail sont supprimées automatiquement après fusion.
+- Branche par défaut sur GitHub : `develop` (cible par défaut des pull requests).
+
+### Messages de commit
+
+Conventional Commits, description **en français**, première ligne ≤ 100 caractères
+(vérifié par le hook `commit-msg`) :
+
+```
+type(portée): description à l'infinitif
+```
+
+Types : `feat`, `fix`, `test`, `docs`, `refactor`, `perf`, `style`, `chore`, `build`, `ci`, `revert`.
+Portée facultative, en minuscules : `saisie`, `projet`, `tache`, `utilisateur`, `config`…, et `web`
+pour tout changement du front-end (`feat(web): …`).
+Changement incompatible de l'API : `!` après le type (`feat(api)!: …`).
+
+### Versions
+
+- Versionnement sémantique `MAJEUR.MINEUR.CORRECTIF`, identique dans `pom.xml`, dans
+  `web/package.json` et dans le tag Git (`v0.1.0`) ; pas de suffixe `-SNAPSHOT`.
+- Changement de version sur `develop` : branche `chore/version-X.Y.Z` qui ne modifie que
+  `pom.xml` et `web/package.json` (avec `web/package-lock.json`), pull request intitulée
+  `chore(release): version X.Y.Z`, fusion en squash.
+- Chaque version passe par une `release/X.Y.Z` qui la fige (version du `pom.xml` et de
+  `web/package.json`, `CHANGELOG.md`, documentation ; aucune nouveauté), est fusionnée dans `main`
+  avec le tag `vX.Y.Z`, puis `develop`
+  passe à la version mineure suivante (branche `chore/version-…`) ; un `hotfix/*` augmente le
+  correctif (`1.0.0` → `1.0.1`) et suit le même circuit.
+- **Chaque passage en production** (`release/*` ou `hotfix/*` fusionnée dans `main`) : section
+  `## [X.Y.Z] - AAAA-MM-JJ` ajoutée dans `CHANGELOG.md` sur la branche de release, puis **release
+  GitHub** `vX.Y.Z` sur le tag, dont les notes reprennent cette section. Le CHANGELOG signale les
+  changements incompatibles, les nouvelles variables d'environnement et les migrations (avec leur
+  compatibilité en mise à jour progressive, voir `docs/DEPLOIEMENT.md`).
+- Le guide de déploiement (`docs/DEPLOIEMENT.md`) est mis à jour dans la PR qui change le
+  déploiement (variable, port, prérequis, procédure).
+
+### Qualité
+
+- Fichiers en UTF-8, fins de ligne LF uniquement (`.gitattributes`, `.editorconfig`).
+- Hooks versionnés dans `.githooks/`, à activer une fois par poste : `git config core.hooksPath .githooks`.
+- L'intégration continue (`.github/workflows/ci.yml`) lance `./mvnw verify` sur chaque pull
+  request vers `main` et `develop` ; les tests ne sont pas relancés avant chaque push local.
+- Le workflow « Front web » (`.github/workflows/web.yml`) vérifie `web/` (lint, format, types, tests,
+  build) quand une pull request le modifie ; « Build et tests » reste la seule vérification obligatoire.
+
+# Backend (API Java)
 
 ## Commandes
 
@@ -15,12 +110,6 @@ docker compose -f docker/keycloak/compose.yaml up -d  # Keycloak de dev (jetons 
 ```
 
 Lancer `./mvnw test` après toute modification et avant de déclarer une tâche terminée.
-
-Skills du projet (`.claude/skills/`) :
-- `/review [périmètre]` : revue des modifications (conventions de ce fichier, sécurité,
-  performance), sans rien modifier.
-- `/test [cible]` : écrit ou complète les tests d'une cible puis les lance ; sans argument, lance
-  toute la suite et diagnostique les échecs.
 
 ## Architecture
 
@@ -111,7 +200,8 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - Messages de contrainte en français, explicites dans l'annotation quand ils sont visibles par
   l'utilisateur (`@DecimalMin(value = ..., message = "doit être d'au moins {value} h")`).
 - Le `Response` expose une fabrique `static from(Entite)` ; les relations sont exposées par leur id
-  (`projetId`, `tacheId`) ; le dernier composant est `AuditResponse audit` (`AuditResponse.from(entite)`).
+  (`projetId`, `tacheId`) ; le dernier composant est `AuditResponse audit` (`AuditResponse.from(entite)`),
+  renvoyé aux seuls administrateurs (`null` pour les autres, à la sérialisation : `AuditReserveConfig`).
 - Un champ booléen optionnel en entrée est un `Boolean` (null = valeur par défaut).
 - Verrouillage optimiste : chaque entité a un `@Version Long version` (colonne `version`), exposé
   dans le `Response`. Le `Request` porte un `Long version` annoté
@@ -144,25 +234,37 @@ service → contrôleur → test) plutôt que d'inventer un autre modèle.
 - `POST` → 201 + en-tête `Location` ; `DELETE` → 200 avec `data: null` et un message de confirmation.
   Exception : un `POST` qui crée plusieurs ressources d'un coup renvoie 201 avec leur liste (éventuellement
   vide) et un message, sans `Location` (voir `POST /api/clotures/tous-projets`).
-- Les filtres de liste sont des `@RequestParam(required = false)`, ou un record validé lu dans les
-  paramètres (`@Valid RechercheSaisiesRequest`) quand des règles portent sur plusieurs filtres.
+- Les filtres et le tri d'une liste sont lus dans un record validé (`@Valid RechercheProjetsRequest`,
+  `RechercheSaisiesRequest`…). Filtre texte « contient » : motif de `MotifRecherche.contient`
+  (jokers échappés), passé en paramètre lié avec `like :x escape '!'` ; casse et accents ignorés par
+  la collation de la base.
 - Toute liste est paginée : paramètre `@Valid PaginationRequest pagination`, réponse
-  `ApiResponse<PageResponse<T>>` (`PageResponse.from(page, XxxResponse::from)`) ; le tri est imposé
-  par le service (`pagination.versPageRequest(Sort.by(...))`), jamais choisi par le client.
+  `ApiResponse<PageResponse<T>>` (`PageResponse.from(page, XxxResponse::from)`). Le client choisit le
+  tri (`tri`, `sens`) parmi une **liste blanche** déclarée par la ressource (énumération
+  `ColonneTri`, ex. `TriProjet`) : une autre valeur → 400 ; le service impose l'ordre par défaut
+  (identifiant) et le départage par identifiant (`pagination.versPageRequest(tri, sens)`). Jamais
+  de nom de propriété fourni librement par le client.
 
 ## Sécurité
 
 - Authentification par jeton OIDC (resource server JWT, `SecurityConfig`), sans session : signature,
   émetteur, **audience** (`OIDC_AUDIENCE`) et expiration vérifiés ; rôle administrateur = valeur
   `Constantes.ROLE_ADMIN` dans la revendication des rôles.
-- Règles grossières par URL et rôle dans `SecurityConfig` (lecture pour tout authentifié, écritures
-  de référentiel réservées à l'administrateur) ; règles fines (« ses propres saisies », membres d'un
-  projet) dans les **services**, via `UtilisateurCourantService` (`estAdmin()`, `get()`), en levant
-  `AccesRefuseException`. Jamais de contrôle d'accès dans un contrôleur.
+- Règles grossières par URL et rôle dans `SecurityConfig` (lecture pour tout titulaire d'une fiche
+  active ou administrateur, sa propre fiche `/api/utilisateurs/moi` pour tout authentifié, liste des
+  utilisateurs et écritures de référentiel réservées à l'administrateur) ; règles fines (« ses propres saisies », membres d'un
+  projet) dans les **services**, via `UtilisateurCourantService` (`estAdmin()`, `get()`) et
+  `AccesProjetService` (`verifierAcces`, `utilisateurRestreint`, `estMembre`, `estResponsable`), en
+  levant `AccesRefuseException`. Jamais de contrôle d'accès dans un contrôleur.
+- Un collaborateur ne lit que les projets dont il est **membre** (et leurs tâches, membres,
+  clôtures) : listes restreintes, 403 sur un projet existant dont il n'est pas membre.
 - 401 et 403 de Spring Security passent par `GlobalExceptionHandler` (enveloppe `ApiResponse`).
 - Un utilisateur est identifié par la revendication `sub` (colonne `utilisateur.sujet`), rattachée
   une fois par l'email du jeton, seulement s'il est déclaré vérifié (`email_verified`, voir
-  `ProprietesSecurite.exigerEmailVerifie`).
+  `ProprietesSecurite.exigerEmailVerifie`), ou dès la création de sa fiche par inscription
+  (`POST /api/utilisateurs/moi`). Une fiche rattachée n'est jamais reprise par un autre compte ;
+  seul un administrateur la détache (`DELETE /api/utilisateurs/{id}/rattachement`), après quoi elle
+  est reprise par l'email vérifié.
 - Actuator : en prod, sur un port de gestion séparé (`MANAGEMENT_PORT`) sans jeton, réservé au
   réseau interne ; sur le port de l'API (dev, test), santé publique et autres points réservés à
   l'administrateur. Tout nouveau point Actuator exposé suit cette règle (`SecurityConfig`).
@@ -191,7 +293,10 @@ Toutes les réponses, succès comme erreurs, utilisent l'enveloppe `ApiResponse`
 
 Ne jamais renvoyer un objet nu ni un `ProblemDetail` depuis un contrôleur. Pour signaler une
 erreur, **lever une exception héritant de `ApplicationException`** ; ne jamais lever une
-`RuntimeException` brute (ni `IllegalArgumentException`, `IllegalStateException`…).
+`RuntimeException` brute (ni `IllegalArgumentException`, `IllegalStateException`…). Seule exception :
+un convertisseur Spring de paramètre (`Converter`) signale une valeur invalide par
+`IllegalArgumentException`, son contrat ; Spring la traduit en erreur de liaison, donc en 400 (voir
+`ConversionParametresConfig`).
 
 Chaque exception porte son code HTTP, que `GlobalExceptionHandler` applique automatiquement :
 
@@ -221,16 +326,23 @@ Messages d'erreur en français, compréhensibles par un utilisateur final.
 ## Règles métier à préserver
 
 - On ne supprime pas une ressource encore référencée : on la désactive (`actif = false`).
+- Un utilisateur qui s'inscrit lui-même a une fiche **inactive** jusqu'à sa validation par un
+  administrateur ; sans fiche active, un compte n'accède qu'à sa propre fiche (`/api/utilisateurs/moi`).
 - Une saisie dure de 0,5 h à 24 h, par pas de 0,5 h (`Constantes.DUREE_MIN_SAISIE`,
   `DUREE_MAX_SAISIE`, `PAS_DUREE_SAISIE`).
 - Le total des saisies d'un utilisateur sur une journée ne dépasse pas `Constantes.MAX_HEURES_JOUR` (24 h).
 - Pas de nouvelle saisie pour un utilisateur, une tâche ou un projet désactivé ; une saisie
   existante reste corrigeable tant qu'on ne change ni l'utilisateur ni la tâche.
+- Rôles d'un membre de projet (`RoleProjet`) : `MANAGER` (responsable) et `BACKUP` (suppléant)
+  voient les saisies de tous les membres et clôturent ; `CONTRIBUTEUR` voit le projet et y saisit.
+  L'utilisateur d'une saisie nouvelle ou réaffectée (autre utilisateur ou autre tâche) doit être
+  membre du projet, quel que soit son rôle, administrateur compris (422) ; une saisie existante
+  reste corrigeable après le retrait de son auteur.
 - Le jour d'une saisie nouvelle ou déplacée (autre jour ou autre tâche) est compris dans la période
   du projet (`dateDebut`, `dateFin`, bornes incluses, nulles = ouvertes).
 - Un mois clôturé pour un projet (`Cloture`) interdit de créer, modifier, déplacer (vers ou depuis
   ce mois) ou supprimer ses saisies, administrateur compris. Seul un mois terminé se clôture, par un
-  administrateur ou un membre du projet ; seul un administrateur le rouvre. Chaque écriture de saisie
+  administrateur, un responsable ou un suppléant du projet ; seul un administrateur le rouvre. Chaque écriture de saisie
   verrouille le projet en lecture et une clôture le verrouille en écriture (`ProjetRepository`) :
   une saisie ne peut pas s'intercaler pendant une clôture.
 
@@ -272,75 +384,6 @@ Messages d'erreur en français, compréhensibles par un utilisateur final.
   placeholders sans valeur par défaut (`${DB_PASSWORD}`). En dev, les valeurs sont dans `.env`
   (ignoré par Git) ; toute nouvelle variable est ajoutée, sans valeur, à `.env.example`.
 
-## Git
-
-- Ne pas committer ni pousser sans demande explicite.
-- Mettre à jour le `README.md` (endpoints, règles, format) quand l'API change.
-
-### Branches (Git Flow)
-
-| Branche     | Créée depuis | Fusionnée dans          | Rôle                                         |
-|-------------|--------------|-------------------------|----------------------------------------------|
-| `main`      | —            | —                       | production ; chaque commit est une version taguée |
-| `develop`   | `main`       | —                       | intégration de la prochaine version          |
-| `feature/*` | `develop`    | `develop`               | une fonctionnalité                           |
-| `bugfix/*`  | `develop`    | `develop`               | correction avant mise en production          |
-| `chore/*`   | `develop`    | `develop`               | maintenance : version, dépendances, configuration |
-| `release/*` | `develop`    | `main` **et** `develop` | préparation d'une version (pas de nouveauté) |
-| `hotfix/*`  | `main`       | `main` **et** `develop` | correctif urgent en production               |
-
-- Nommage : `type/numero-description-courte` en minuscules et tirets
-  (`feature/12-saisie-sans-date`, `chore/version-0.2.0`, `release/1.0.0`, `hotfix/1.0.1-total-journalier`).
-- **Toute** modification de `main` ou `develop` passe par une pull request : GitHub l'impose à
-  tous, administrateurs compris (CI « Build et tests » verte et branche à jour), et le hook
-  `commit-msg` refuse localement les commits directs sur ces branches.
-- `feature/*`, `bugfix/*`, `chore/*` → `develop` : pull request fusionnée en **squash**, après
-  `/review`. Le titre de la pull request devient le message du commit : il suit donc le format
-  Conventional Commits.
-- `release/*` et `hotfix/*` → `main` : pull request fusionnée en **merge commit** (équivalent
-  `--no-ff`), puis tag `vX.Y.Z` sur `main` ; reporter ensuite la même branche dans `develop` par
-  une pull request en merge commit (pas de squash, pour garder l'historique commun).
-- Les branches de travail sont supprimées automatiquement après fusion.
-- Branche par défaut sur GitHub : `develop` (cible par défaut des pull requests).
-
-### Messages de commit
-
-Conventional Commits, description **en français**, première ligne ≤ 100 caractères
-(vérifié par le hook `commit-msg`) :
-
-```
-type(portée): description à l'infinitif
-```
-
-Types : `feat`, `fix`, `test`, `docs`, `refactor`, `perf`, `style`, `chore`, `build`, `ci`, `revert`.
-Portée facultative, en minuscules : `saisie`, `projet`, `tache`, `utilisateur`, `config`…
-Changement incompatible de l'API : `!` après le type (`feat(api)!: …`).
-
-### Versions
-
-- Versionnement sémantique `MAJEUR.MINEUR.CORRECTIF`, identique dans `pom.xml` et dans le tag Git
-  (`v0.1.0`) ; pas de suffixe `-SNAPSHOT`.
-- Changement de version sur `develop` : branche `chore/version-X.Y.Z` qui ne modifie que
-  `pom.xml`, pull request intitulée `chore(release): version X.Y.Z`, fusion en squash.
-- Chaque version passe par une `release/X.Y.Z` qui la fige (version du `pom.xml`, `CHANGELOG.md`,
-  documentation ; aucune nouveauté), est fusionnée dans `main` avec le tag `vX.Y.Z`, puis `develop`
-  passe à la version mineure suivante (branche `chore/version-…`) ; un `hotfix/*` augmente le
-  correctif (`1.0.0` → `1.0.1`) et suit le même circuit.
-- **Chaque passage en production** (`release/*` ou `hotfix/*` fusionnée dans `main`) : section
-  `## [X.Y.Z] - AAAA-MM-JJ` ajoutée dans `CHANGELOG.md` sur la branche de release, puis **release
-  GitHub** `vX.Y.Z` sur le tag, dont les notes reprennent cette section. Le CHANGELOG signale les
-  changements incompatibles, les nouvelles variables d'environnement et les migrations (avec leur
-  compatibilité en mise à jour progressive, voir `docs/DEPLOIEMENT.md`).
-- Le guide de déploiement (`docs/DEPLOIEMENT.md`) est mis à jour dans la PR qui change le
-  déploiement (variable, port, prérequis, procédure).
-
-### Qualité
-
-- Fichiers en UTF-8, fins de ligne LF uniquement (`.gitattributes`, `.editorconfig`).
-- Hooks versionnés dans `.githooks/`, à activer une fois par poste : `git config core.hooksPath .githooks`.
-- L'intégration continue (`.github/workflows/ci.yml`) lance `./mvnw verify` sur chaque pull
-  request vers `main` et `develop` ; les tests ne sont pas relancés avant chaque push local.
-
 ## Interdictions
 
 - Logs via `System.out.println()` ou `printStackTrace()` : utiliser SLF4J
@@ -349,5 +392,6 @@ Changement incompatible de l'API : `!` après le type (`feat(api)!: …`).
 - SQL natif ou requêtes concaténées : utiliser les méthodes du repository (voir « Repositories »).
   Les scripts de migration Flyway (DDL) ne sont pas concernés : c'est le seul endroit où du SQL est écrit.
 - Appeler un repository depuis un contrôleur : toujours passer par le service.
-- Lever une `RuntimeException` brute : utiliser une sous-classe d'`ApplicationException`.
+- Lever une `RuntimeException` brute : utiliser une sous-classe d'`ApplicationException` (sauf dans
+  un convertisseur Spring, voir « Format des réponses et gestion des erreurs »).
 - Exposer une entité JPA dans une réponse : passer par un DTO.

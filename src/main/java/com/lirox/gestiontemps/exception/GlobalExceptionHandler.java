@@ -1,5 +1,6 @@
 package com.lirox.gestiontemps.exception;
 
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.stream.Collectors;
 
@@ -18,6 +19,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -29,6 +31,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.lirox.gestiontemps.dto.ApiResponse;
+import com.lirox.gestiontemps.dto.ValeurParametre;
 
 /**
  * Traduit toutes les exceptions (métier et Spring MVC) en réponses {@link ApiResponse} de statut "error".
@@ -108,14 +111,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	}
 
 	/**
-	 * Rôle insuffisant pour l'URL demandée (ex. écriture d'un projet sans le rôle administrateur),
-	 * relayé par Spring Security.
+	 * Refus relayé par Spring Security : rôle insuffisant pour l'URL demandée (ex. écriture d'un
+	 * projet sans le rôle administrateur), ou compte sans fiche active (le refus du service en cause,
+	 * {@link AccesRefuseException}, porte alors le message).
 	 *
 	 * @param ex refus d'accès
 	 * @return 403 avec un message destiné à l'utilisateur
 	 */
 	@ExceptionHandler(AccessDeniedException.class)
 	public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+		if (ex.getCause() instanceof AccesRefuseException refus) {
+			return error(HttpStatus.FORBIDDEN, refus.getMessage());
+		}
 		return error(HttpStatus.FORBIDDEN, "Accès refusé : cette opération est réservée aux administrateurs");
 	}
 
@@ -140,7 +147,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 			HttpHeaders headers, HttpStatusCode status, WebRequest request) {
 		String details = ex.getBindingResult().getFieldErrors().stream()
 				.sorted(Comparator.comparing(FieldError::getField))
-				.map(e -> e.getField() + " : " + (e.isBindingFailure() ? "format invalide" : e.getDefaultMessage()))
+				.map(e -> e.getField() + " : "
+						+ (e.isBindingFailure() ? formatInvalide(ex.getBindingResult(), e.getField()) : e.getDefaultMessage()))
 				.collect(Collectors.joining(" ; "));
 		return detail(ex, "Requête invalide : " + details, headers, status, request);
 	}
@@ -189,6 +197,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 			WebRequest request) {
 		String message = body instanceof ProblemDetail problem ? problem.getDetail() : null;
 		return new ResponseEntity<>(ApiResponse.error(message), headers, statusCode);
+	}
+
+	/**
+	 * Valeur d'un paramètre impossible à convertir. Pour une énumération (colonne de tri, sens, rôle…),
+	 * le message liste les valeurs admises : le client peut corriger sa requête.
+	 */
+	private static String formatInvalide(BindingResult resultat, String champ) {
+		Class<?> type = resultat.getFieldType(champ);
+		if (type == null || !type.isEnum()) {
+			return "format invalide";
+		}
+		String valeurs = Arrays.stream(type.getEnumConstants())
+				.map(constante -> constante instanceof ValeurParametre valeur ? valeur.valeur()
+						: ((Enum<?>) constante).name())
+				.collect(Collectors.joining(", "));
+		return "valeur non admise (valeurs admises : " + valeurs + ")";
 	}
 
 	private ResponseEntity<Object> detail(Exception ex, String message, HttpHeaders headers, HttpStatusCode status,

@@ -1,0 +1,13 @@
+.next/
+node_modules/
+coverage/
+package-lock.json
+next-env.d.ts
+src/lib/api/schema.d.ts
+AGENTS.md
+# Généré par shadcn, jamais modifié à la main
+src/components/ui/
+# Tests de bout en bout : rapports et état locaux
+playwright-report/
+test-results/
+e2e/.etat/

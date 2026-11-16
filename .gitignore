@@ -40,3 +40,12 @@ build/
 ### Claude Code (préférences personnelles) ###
 CLAUDE.local.md
 .claude/settings.local.json
+
+### Front-end web (web/, voir aussi web/.gitignore) ###
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+web/.env*
+!web/.env.example

@@ -15,11 +15,37 @@ if [ -n "$fichiers_env" ]; then
 fi
 
 # Secrets en clair : mot-clé (password, secret, token...) suivi de « : » ou « = » et d'une valeur.
-# Ignorés : lignes contenant un placeholder ${...} (Spring, shell), le modèle .env.example et ce dossier.
-secrets=$(git diff --cached -U0 --diff-filter=ACMR -- . ':(exclude).env.example' ':(exclude).githooks' \
-	| grep -E '^\+[^+]' \
-	| grep -vF '${' \
-	| grep -iE '(password|passwd|pwd|secret|token|api[_-]?key)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[^[:space:]"'"'"'$]{4,}')
+# Ignorés : lignes contenant un placeholder ${...} (Spring, shell), les modèles .env.example et ce dossier.
+# - Fichiers de configuration (yml, properties, json…) : toute valeur, entre guillemets ou non.
+# - Code source (Java, TypeScript, JavaScript) : seulement une valeur littérale entre guillemets ;
+#   une valeur non citée y est du code (`accessToken: account.access_token`, `process.env.X`).
+# - Tests du front-end (*.test.ts, *.test.tsx) : non contrôlés, ils manipulent des jetons factices.
+mot_cle='(password|passwd|pwd|secret|token|api[_-]?key)["'"'"']?[[:space:]]*[:=][[:space:]]*'
+code_source='*.java *.ts *.tsx *.js *.mjs *.cjs'
+exclusions_code=''
+for motif in $code_source; do
+	exclusions_code="$exclusions_code :(exclude,glob)**/$motif"
+done
+lignes_ajoutees() {
+	git diff --cached -U0 --diff-filter=ACMR -- "$@" \
+		':(exclude,glob)**/.env.example' ':(exclude).githooks' \
+		| grep -E '^\+[^+]' \
+		| grep -vF '${'
+}
+inclusions_code=''
+for motif in $code_source; do
+	inclusions_code="$inclusions_code :(glob)**/$motif"
+done
+# shellcheck disable=SC2086 # découpage voulu des listes de pathspecs
+secrets=$(
+	{
+		lignes_ajoutees . $exclusions_code \
+			| grep -iE "$mot_cle"'["'"'"']?[^[:space:]"'"'"'$]{4,}'
+		lignes_ajoutees $inclusions_code \
+			':(exclude,glob)**/*.test.ts' ':(exclude,glob)**/*.test.tsx' \
+			| grep -iE "$mot_cle"'["'"'"'][^[:space:]"'"'"'$]{4,}'
+	}
+)
 if [ -n "$secrets" ]; then
 	echo "Commit refusé : secret possiblement écrit en clair :" >&2
 	echo "$secrets" | sed 's/^/  /' >&2

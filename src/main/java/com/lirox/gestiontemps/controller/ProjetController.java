@@ -1,6 +1,7 @@
 package com.lirox.gestiontemps.controller;
 
 import java.net.URI;
+import java.time.YearMonth;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -19,6 +21,9 @@ import com.lirox.gestiontemps.dto.PageResponse;
 import com.lirox.gestiontemps.dto.PaginationRequest;
 import com.lirox.gestiontemps.dto.ProjetRequest;
 import com.lirox.gestiontemps.dto.ProjetResponse;
+import com.lirox.gestiontemps.dto.RechercheProjetsRequest;
+import com.lirox.gestiontemps.dto.RechercheSyntheseRequest;
+import com.lirox.gestiontemps.dto.SyntheseMoisResponse;
 import com.lirox.gestiontemps.service.ProjetService;
 import com.lirox.gestiontemps.validation.Modification;
 
@@ -37,14 +42,32 @@ public class ProjetController {
 	private final ProjetService projetService;
 
 	/**
-	 * {@code GET /api/projets?page=&taille=} : liste paginée des projets.
+	 * {@code GET /api/projets?code=&nom=&actif=&tri=&sens=&page=&taille=} : liste paginée des projets.
 	 *
+	 * @param recherche  filtres et tri (colonnes admises : {@code TriProjet})
 	 * @param pagination page demandée (à partir de 1) et taille
 	 * @return une page de projets
 	 */
 	@GetMapping
-	public ApiResponse<PageResponse<ProjetResponse>> findAll(@Valid PaginationRequest pagination) {
-		return ApiResponse.success(projetService.findAll(pagination));
+	public ApiResponse<PageResponse<ProjetResponse>> findAll(@Valid RechercheProjetsRequest recherche,
+			@Valid PaginationRequest pagination) {
+		return ApiResponse.success(projetService.findAll(recherche, pagination));
+	}
+
+	/**
+	 * {@code GET /api/projets/synthese?mois=AAAA-MM&projet=&cloture=&page=&taille=} : synthèse d'un
+	 * mois par projet (administrateur) — total des heures saisies et clôture du mois — et total général.
+	 *
+	 * @param mois       mois de la synthèse (obligatoire)
+	 * @param recherche  filtres : texte du code ou du nom ({@code projet}), mois clôturé ou ouvert
+	 *                   ({@code cloture})
+	 * @param pagination page demandée (à partir de 1) et taille
+	 * @return une page de synthèses, triées par code, et le total général des projets filtrés
+	 */
+	@GetMapping("/synthese")
+	public ApiResponse<SyntheseMoisResponse> syntheseDuMois(@RequestParam YearMonth mois,
+			@Valid RechercheSyntheseRequest recherche, @Valid PaginationRequest pagination) {
+		return ApiResponse.success(projetService.syntheseDuMois(mois, recherche, pagination));
 	}
 
 	/**

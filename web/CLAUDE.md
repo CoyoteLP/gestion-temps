@@ -1,0 +1,212 @@
+# CLAUDE.md — front-end web
+
+Conventions du front-end **gestion-temps** (Next.js, App Router, TypeScript `strict`, Tailwind CSS 4,
+shadcn/ui). Elles complètent la partie « Commun » du `CLAUDE.md` racine (Git Flow, commits, versions,
+qualité) ; la partie « Backend (API Java) » ne s'applique pas ici.
+
+@AGENTS.md
+
+## Commandes
+
+À lancer depuis `web/` :
+
+```bash
+npm run dev            # serveur de dev sur http://localhost:3000 (Keycloak et API lancés, .env.local rempli)
+npm run lint           # ESLint (config Next)
+npm run format         # Prettier (format:check pour vérifier seulement)
+npm run typecheck      # tsc --noEmit
+npm test               # Vitest (test:watch en continu)
+npm run build          # build de production
+npm run api:types      # régénère src/lib/api/schema.d.ts depuis /v3/api-docs de l'API de dev
+```
+
+Après toute modification : `lint`, `format:check`, `typecheck` et `test` passent avant de déclarer
+une tâche terminée (le workflow « Front web » lance les mêmes, plus `build`).
+
+Sous Windows, lancer Vitest depuis un chemin dont la lettre de lecteur est en **majuscule**
+(`C:\…`) : avec `c:\…` (terminal de VS Code), Vitest charge deux fois son runner et tous les
+fichiers échouent (« No test suite found », « failed to find the runner »).
+
+Skills du front-end (`web/.claude/skills/`) : `web:review [périmètre]` (revue des modifications de
+`web/`, sans rien modifier) et `web:test [cible]` (écrit et lance les tests Vitest d'une cible, ou
+lance toute la suite et diagnostique les échecs).
+
+## Architecture
+
+BFF (_backend for frontend_) : le navigateur ne parle qu'au serveur Next.js ; c'est lui qui appelle
+l'API avec le jeton de l'utilisateur. L'API n'a donc pas de CORS à ouvrir.
+
+```
+src/
+  app/                  routes (App Router)
+    (app)/              pages authentifiées, dans la coquille (barre latérale, en-tête)
+      (compte-actif)/   pages qui appellent l'API : réservées à un compte actif ou administrateur
+      profil/           toujours accessible, même sans fiche active
+    connexion/          seule page publique
+    api/auth/callback/  retour du fournisseur OIDC après la connexion
+  components/           composants de l'application
+    ui/                 composants shadcn/ui : générés, jamais modifiés à la main
+  hooks/                hooks React
+  lib/
+    actions/            état renvoyé par les Server Actions (EtatAction) et fonctions communes
+    api/                accès à l'API : apiFetch, ApiError, types, une fonction par appel
+    auth/               connexion OIDC (openid-client), cookie de session (iron-session), jetons,
+                        actions de connexion, d'inscription et de déconnexion
+    compte/             fiche de l'utilisateur connecté : enregistrement, profil (schéma, actions)
+    projets/, taches/,  une ressource par dossier : schéma de formulaire (schema-*.ts), Server
+    membres/,           Actions (actions.ts), lectures composées côté serveur
+    utilisateurs/
+    constantes.ts       valeurs partagées
+  proxy.ts              protection des routes (ex-middleware) et seul renouvellement du jeton
+```
+
+- **Server Components par défaut** ; `"use client"` seulement pour l'interactivité (état, effets,
+  événements, hooks du navigateur), sur le plus petit composant possible.
+- Lectures dans les Server Components, écritures en Server Actions. Pas de bibliothèque de cache
+  côté client.
+- Un accès à la session ou à l'API dans une page est isolé dans un composant `async` placé sous
+  `<Suspense>` avec un squelette (`Skeleton`) : le reste de la page est prérendu (`cacheComponents`).
+- Valeur propre à chaque requête (`crypto.randomUUID()`, `Math.random()`, `Date.now()`) dans un
+  rendu : la précéder de `await connection()` (`next/server`), sinon Next.js la refuse au prérendu
+  (voir `apiFetch`).
+- **Compte actif** : sans fiche active, l'API refuse tout (403) sauf `/api/utilisateurs/moi`. Toute
+  page qui lit l'API se place dans le groupe `(compte-actif)`, dont le layout (`GardeCompte`)
+  affiche à la place l'état de l'inscription (« en attente de validation », « à finaliser »).
+  La fiche est créée à la connexion (retour du fournisseur, `enregistrerALaConnexion`).
+- Composant client qui lit l'URL (`usePathname`, `useSearchParams`) : sous une route à paramètre
+  dynamique (`/projets/[id]`), il doit être sous `<Suspense>`, sinon le build échoue (voir
+  `EntreeNavigation`, prérendue sans mise en évidence).
+- `src/components/ui/` : ajouter un composant par `npx shadcn@latest add <composant>`, ne jamais
+  l'éditer (ni le reformater : exclu de Prettier). Pour l'adapter, l'envelopper dans un composant
+  de `src/components/`.
+
+## Accès à l'API
+
+- **`apiFetch<T>()`** (`src/lib/api/client.ts`, `server-only`) est le seul accès à l'API : il ajoute
+  le jeton et l'en-tête `X-Correlation-Id`, lit l'enveloppe `ApiResponse` et renvoie `data`, ou lève
+  une `ApiError` (`statut`, `message` de l'API, `identifiantCorrelation`). Jamais de `fetch` direct
+  vers l'API ailleurs.
+- Une fonction par appel, regroupées par ressource (`src/lib/api/projets.ts` : `listerProjets`),
+  typées avec les modèles de `modeles.ts`, eux-mêmes dérivés du schéma généré `schema.d.ts` (fichier
+  versionné, jamais modifié à la main : `npm run api:types` après un changement de l'API).
+- Listes : **toujours `TableauListe`** (`src/components/tableau-liste.tsx`), seul mécanisme de tri et
+  de filtre de l'application. Colonnes déclarées dans `src/lib/listes/definitions.ts` (clés = colonnes
+  de tri et filtres de l'API, filtre `texte` ou `choix`, préfixe si la page affiche deux listes) ;
+  état lu dans l'URL avec `lireEtatListe` (valeurs inconnues ignorées), transmis à la fonction
+  d'API (`listerProjets(etat)`, paramètres communs `parametresTri`). Tri, filtres et pagination sont
+  faits par l'API sur toute la liste, jamais dans le navigateur ; les lignes reprennent les classes
+  des colonnes et se terminent toujours par une cellule d'actions (vide s'il n'y en a pas) : la loupe
+  qui affiche ou masque la ligne de filtres est au-dessus (filtres repliés par défaut, ouverts si un
+  filtre est actif).
+- Chemin passé à `apiFetch` : `/api/…` fait de segments simples, avec des identifiants vérifiés
+  (nombres : `identifiantValide`, `lireIdentifiant`) ; jamais une chaîne venue du navigateur telle
+  quelle. `construireUrl` refuse tout autre chemin (`//hôte`, `..`, retour à la ligne) avant
+  d'envoyer quoi que ce soit : le jeton ne part jamais vers un autre hôte (alerte CodeQL SSRF).
+- `PUT` : renvoyer la `version` lue ; un 409 propose de recharger la ressource.
+- Option `jeton` d'`apiFetch` : seulement quand le cookie de la requête ne porte pas encore le bon
+  jeton (connexion en cours, jeton renouvelé par `jetonAccesRenouvele` dans une Server Action) ;
+  partout ailleurs, le jeton est celui de la session.
+- Lecture partagée dans un même rendu (layout, menu, page) : l'envelopper dans `cache` de React
+  (voir `lireMonCompte`).
+- Les messages d'erreur de l'API (déjà en français, destinés à l'utilisateur) sont affichés tels
+  quels, avec l'identifiant de corrélation comme référence (`AlerteErreur`). Dans un composant de
+  lecture : `const resultat = await valeurOuErreurApi(lecture)`, puis `AlerteErreur` si
+  `resultat instanceof ApiError`. Les messages par défaut
+  par statut sont dans `src/lib/api/erreurs.ts`.
+
+## Sécurité
+
+- **Le jeton ne quitte jamais le serveur** : il vit dans le cookie de session chiffré `httpOnly`
+  (`iron-session`, clé `SESSION_SECRET`, réparti sur plusieurs cookies au besoin). Les composants
+  ne reçoivent que `utilisateurCourant()` (nom, email, rôle administrateur) ; ne jamais passer un
+  jeton en prop à un Client Component, ni le journaliser.
+- **Authentification** : Authorization Code + PKCE avec `openid-client` (`state`, `nonce`, jeton
+  d'identité vérifié au retour). Le jeton d'accès n'est renouvelé que dans le proxy, qui transmet
+  le jeton neuf à la page ; `jetonAcces()` le lit sans le renouveler. Seule exception :
+  `jetonAccesRenouvele()` dans une Server Action (finaliser l'inscription).
+- Tout module qui lit un jeton ou appelle l'API importe `server-only`.
+- Variables `NEXT_PUBLIC_*` : jamais de secret ni d'URL interne (elles sont copiées dans le
+  JavaScript du navigateur). Toute nouvelle variable est ajoutée, sans secret, à `web/.env.example`.
+- **Les contrôles d'accès sont faits par l'API.** Le front ne fait que masquer les actions non
+  autorisées (`estAdmin` de la session) ; une page ou une action ne suppose jamais qu'un bouton
+  masqué suffit.
+  - Action d'administration dans une page prérendue : l'envelopper dans `<ReserveAdmin>` (sous
+    `<Suspense fallback={null}>`) ; dans un composant qui lit déjà la session, tester `estAdmin`.
+  - Page réservée à l'administrateur (création, écran Utilisateurs) : `await exigerAdmin()` en tête
+    du composant `async` ; les autres reçoivent la page « introuvable », comme pour une adresse
+    inconnue.
+- Redirection après connexion : chemin relatif de l'application uniquement (`cheminDeRetour`).
+- **En-têtes de sécurité** : le proxy pose une CSP à nonce propre à chaque requête (scripts
+  autorisés seulement avec le nonce, `'strict-dynamic'`), HSTS en HTTPS ; les en-têtes fixes sont
+  dans `next.config.ts` (`src/lib/securite/`). Conséquences :
+  - toutes les pages sont rendues à la requête (`instant = false` dans le layout racine) ;
+  - aucun script en ligne écrit à la main ; un script tiers (`next/script`) reçoit le nonce lu par
+    `headers().get("x-nonce")` (voir le layout racine et `FournisseurTheme`) ;
+  - une nouvelle origine (image, police, API appelée du navigateur) s'ajoute à la CSP
+    (`politiqueContenu`), avec son test.
+- Aucune entrée utilisateur ni donnée de l'API injectée en HTML brut (`dangerouslySetInnerHTML`
+  interdit) ; React échappe le texte.
+
+## Conventions de code
+
+- **Vocabulaire métier en français** (composants, fonctions, variables, messages, noms de tests) :
+  `listerProjets`, `AlerteErreur`, `utilisateurCourant`. Le vocabulaire technique React/Next reste
+  en anglais (`page.tsx`, `layout.tsx`, `props`, `children`).
+- Composants en **PascalCase**, fichiers en **kebab-case** (`menu-utilisateur.tsx`), constantes en
+  **UPPER_SNAKE_CASE**.
+- Pas de nombre magique : valeurs significatives dans `src/lib/constantes.ts`.
+- Indentation par tabulations, sans point-virgule (Prettier, `.prettierrc.json`) ; imports triés
+  par groupe (bibliothèques, `@/…`, relatifs).
+- Commentaire JSDoc sur les fonctions et composants exportés non évidents : rôle, `@param`,
+  `@returns`, `@throws`.
+- Dates et nombres : `date-fns` avec la locale `fr` et `Intl.NumberFormat("fr-FR")`, via
+  `src/lib/format.ts`.
+- Formulaires : react-hook-form + zod, avec les mêmes bornes que les DTO de l'API (schéma dans
+  `src/lib/…/schema-*.ts`, partagé par le formulaire et la Server Action, qui le revalide). Champs
+  avec `Field`, `FieldLabel`, `FieldError` de shadcn. La Server Action renvoie un état (`EtatAction` :
+  succès, invalide avec une erreur par champ, conflit 409, erreur avec référence ; commun à tous
+  les formulaires, dans `src/lib/actions/`) et appelle `refresh()` (`next/cache`) après un succès ;
+  le formulaire est remonté sur la nouvelle version (`key={version}`).
+- Une Server Action revalide tout ce qu'elle reçoit (schéma, `identifiantValide`, `versionValide`
+  de `src/lib/actions/resultats.ts`) : elle est appelable directement, sans passer par la page.
+  Erreur de l'API → `etatErreur` (409 → conflit, avec le message de l'API). Un 409 qui désigne un
+  champ (code ou membre en double, en création) est rattaché à ce champ.
+- Messages colorés selon leur niveau, avec les couleurs du thème (`globals.css`) : **information en
+  bleu** (`information`), **avertissement en orange** (`avertissement` : l'API acceptera
+  l'enregistrement), **erreur en rouge** (`destructive` : action refusée ou impossible, y compris
+  un message affiché avant l'envoi quand l'API refusera l'enregistrement). Ligne de formulaire :
+  `Message` ; encadré : `Encadre` (information, avertissement) ou `AlerteErreur` (erreur de l'API),
+  dans `src/components/message.tsx`. Une aide de champ (`FieldDescription`) reste en gris.
+- Opération irréversible (suppression, retrait, désactivation) : `DialogueConfirmation`, qui reçoit
+  la Server Action liée à sa ressource (`action.bind(null, id)`) et affiche le refus de l'API sans
+  se fermer. Un 409 « modifié entre-temps » : `AlerteConflit` (bouton « Recharger »).
+- Formulaire court (deux ou trois champs) : dans un dialogue (`DialogueTache`) ; sinon, une page.
+- Un fichier `"use server"` n'exporte que des fonctions async : types et valeurs initiales vont
+  dans un module à part (`etat-action.ts`).
+- Textes de l'interface en français ; `lang="fr"` sur la page.
+
+## Accessibilité
+
+- Composants Radix (shadcn/ui) pour tout élément interactif complexe (menu, dialogue, info-bulle).
+- Chaque champ a un libellé ; un bouton réduit à une icône a un `aria-label`.
+- Tout est utilisable au clavier ; la page courante est signalée (`aria-current="page"`).
+- Les états de chargement ont un texte accessible (`aria-busy`, `aria-label`).
+
+## Tests
+
+- Vitest + Testing Library ; fichier `xxx.test.ts(x)` à côté du fichier testé.
+- Noms de `describe` et `it` en français décrivant le comportement.
+- Chaque règle s'accompagne d'un test du cas accepté **et** du cas refusé (ex. `cheminDeRetour` :
+  chemins acceptés, destinations externes refusées).
+- Composants : requêtes par rôle ou texte visible (`getByRole`), pas par classe CSS.
+- Appels réseau simulés avec `vi.stubGlobal("fetch", …)`, variables avec `vi.stubEnv` (remis à zéro
+  automatiquement, voir `vitest.config.mts`).
+- Composant serveur `async` : `render(await Composant(props))` (voir `TachesProjet`) ; `notFound()`
+  se vérifie par l'erreur `NEXT_HTTP_ERROR_FALLBACK;404`. `src/test/setup.ts` fournit les API du
+  navigateur absentes de jsdom (`ResizeObserver`, `matchMedia`).
+- **Tests de bout en bout** (Playwright, `e2e/`) contre la pile complète de `docker/e2e` (voir le
+  README) : données préparées par l'API (`preparation.setup.ts`), une connexion par compte
+  réutilisée (`connexion.setup.ts`), parcours dans `*.spec.ts`. Importer `test` et `expect` de
+  `./outils` : chaque test échoue s'il provoque une violation de la CSP ou une erreur JavaScript.
+  Un nouvel écran ou parcours important y gagne un test ; les tests partagent des données et
+  s'exécutent l'un après l'autre.

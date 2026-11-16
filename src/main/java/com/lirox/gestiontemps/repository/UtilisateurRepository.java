@@ -2,6 +2,8 @@ package com.lirox.gestiontemps.repository;
 
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -74,5 +76,24 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, Long> 
 	@QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = Constantes.DELAI_VERROU_UTILISATEUR_MS))
 	@Query("select u from Utilisateur u where u.id = :id")
 	Optional<Utilisateur> findVerrouilleById(@Param("id") Long id);
+
+	/**
+	 * Recherche filtrée, paginée et triée selon {@code page} (un paramètre null n'est pas filtré). Les
+	 * motifs texte viennent de {@code MotifRecherche.contient} : échappés avec {@code !}.
+	 *
+	 * @param nom   motif du nom ou du prénom
+	 * @param email motif de l'email
+	 * @param actif statut
+	 * @param page  page et tri demandés
+	 * @return la page d'utilisateurs correspondants
+	 */
+	@Query("""
+			select u from Utilisateur u
+			where (:nom is null or u.nom like :nom escape '!' or u.prenom like :nom escape '!')
+			  and (:email is null or u.email like :email escape '!')
+			  and (:actif is null or u.actif = :actif)
+			""")
+	Page<Utilisateur> search(@Param("nom") String nom, @Param("email") String email, @Param("actif") Boolean actif,
+			Pageable page);
 
 }

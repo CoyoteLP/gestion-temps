@@ -1,0 +1,14 @@
+{
+	"useTabs": true,
+	"tabWidth": 4,
+	"semi": false,
+	"printWidth": 110,
+	"plugins": ["prettier-plugin-tailwindcss"],
+	"tailwindStylesheet": "./src/app/globals.css",
+	"overrides": [
+		{
+			"files": ["*.md", "*.yml", "*.yaml"],
+			"options": { "useTabs": false, "tabWidth": 2 }
+		}
+	]
+}

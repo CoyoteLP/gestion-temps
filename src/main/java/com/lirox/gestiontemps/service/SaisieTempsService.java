@@ -30,12 +30,13 @@ import com.lirox.gestiontemps.repository.SaisieTempsRepository;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Gestion des saisies de temps et des règles qui les encadrent : utilisateur, tâche et projet
- * actifs, jour dans la période du projet, mois non clôturé, total journalier limité à
- * {@link Constantes#MAX_HEURES_JOUR} heures, et droits d'accès.
+ * Gestion des saisies de temps et des règles qui les encadrent : utilisateur membre du projet,
+ * utilisateur, tâche et projet actifs, jour dans la période du projet, mois non clôturé, total
+ * journalier limité à {@link Constantes#MAX_HEURES_JOUR} heures, et droits d'accès.
  * <p>
  * Droits : un administrateur accède à toutes les saisies ; un collaborateur crée, modifie et
- * supprime ses propres saisies, et consulte en plus celles des projets dont il est membre.
+ * supprime ses propres saisies, et consulte en plus celles des projets dont il est responsable ou
+ * suppléant (pas contributeur, voir {@link AccesProjetService#estResponsable}).
  * <p>
  * Les écritures s'exécutent en {@code READ_COMMITTED} et verrouillent l'utilisateur concerné :
  * deux écritures simultanées pour le même utilisateur s'exécutent l'une après l'autre, et le total
@@ -51,7 +52,7 @@ public class SaisieTempsService {
 	private final SaisieTempsRepository saisieTempsRepository;
 	private final UtilisateurService utilisateurService;
 	private final TacheService tacheService;
-	private final MembreProjetService membreProjetService;
+	private final AccesProjetService accesProjetService;
 	private final ClotureService clotureService;
 	private final UtilisateurCourantService utilisateurCourantService;
 	private final Clock clock;
@@ -61,7 +62,8 @@ public class SaisieTempsService {
 	 * autres filtres sont optionnels (null = non filtré).
 	 * <p>
 	 * Un collaborateur obtient ses propres saisies (filtre utilisateur par défaut), ou toutes celles
-	 * d'un projet dont il est membre lorsqu'il filtre sur ce projet ou sur une de ses tâches.
+	 * d'un projet dont il est responsable ou suppléant lorsqu'il filtre sur ce projet ou sur une de
+	 * ses tâches.
 	 *
 	 * @param filtres    utilisateur, projet, tâche et période (validés : période complète, ordonnée,
 	 *                   d'au plus {@value Constantes#DUREE_MAX_RECHERCHE_ANNEES} an)
@@ -69,7 +71,7 @@ public class SaisieTempsService {
 	 * @return une page de saisies correspondantes
 	 * @throws ResourceNotFoundException si la tâche filtrée n'existe pas
 	 * @throws AccesRefuseException      si un collaborateur demande les saisies d'un autre utilisateur
-	 *                                   hors d'un projet dont il est membre
+	 *                                   hors d'un projet dont il est responsable ou suppléant
 	 */
 	public PageResponse<SaisieTempsResponse> search(RechercheSaisiesRequest filtres, PaginationRequest pagination) {
 		Long utilisateurFiltre = filtres.utilisateurId();
@@ -78,11 +80,11 @@ public class SaisieTempsService {
 		if (!utilisateurCourantService.estAdmin()) {
 			Long moi = utilisateurCourantService.get().getId();
 			Long projetFiltre = tacheId != null ? tacheService.getTache(tacheId).getProjet().getId() : projetId;
-			boolean membreDuProjet = projetFiltre != null && membreProjetService.estMembre(projetFiltre, moi);
-			if (!membreDuProjet) {
+			boolean responsable = projetFiltre != null && accesProjetService.estResponsable(projetFiltre, moi);
+			if (!responsable) {
 				if (utilisateurFiltre != null && !utilisateurFiltre.equals(moi)) {
-					throw new AccesRefuseException(
-							"Vous ne pouvez consulter que vos saisies ou celles des projets dont vous êtes membre");
+					throw new AccesRefuseException("Vous ne pouvez consulter que vos saisies ou celles des projets"
+							+ " dont vous êtes responsable ou suppléant");
 				}
 				utilisateurFiltre = moi;
 			}
@@ -100,14 +102,14 @@ public class SaisieTempsService {
 	 * @return la saisie
 	 * @throws ResourceNotFoundException si la saisie n'existe pas
 	 * @throws AccesRefuseException      si l'appelant n'est ni administrateur, ni l'auteur de la
-	 *                                   saisie, ni membre de son projet
+	 *                                   saisie, ni responsable ou suppléant de son projet
 	 */
 	public SaisieTempsResponse findById(Long id) {
 		SaisieTemps saisie = getSaisie(id);
 		if (!utilisateurCourantService.estAdmin()) {
 			Long moi = utilisateurCourantService.get().getId();
 			boolean auteur = saisie.getUtilisateur().getId().equals(moi);
-			if (!auteur && !membreProjetService.estMembre(saisie.getTache().getProjet().getId(), moi)) {
+			if (!auteur && !accesProjetService.estResponsable(saisie.getTache().getProjet().getId(), moi)) {
 				throw new AccesRefuseException("Vous n'avez pas accès à cette saisie");
 			}
 		}
@@ -222,10 +224,11 @@ public class SaisieTempsService {
 	}
 
 	/**
-	 * Les contrôles d'activité ne portent que sur une nouvelle affectation (création, ou changement
-	 * d'utilisateur/de tâche) : une saisie existante reste corrigeable après une désactivation.
+	 * Les contrôles d'activité et d'appartenance au projet ne portent que sur une nouvelle affectation
+	 * (création, ou changement d'utilisateur/de tâche) : une saisie existante reste corrigeable après
+	 * une désactivation ou le retrait de son utilisateur du projet.
 	 */
-	private static void verifierAffectation(SaisieTemps saisie, Utilisateur utilisateur, Tache tache) {
+	private void verifierAffectation(SaisieTemps saisie, Utilisateur utilisateur, Tache tache) {
 		boolean utilisateurChange = saisie.getUtilisateur() == null
 				|| !saisie.getUtilisateur().getId().equals(utilisateur.getId());
 		if (utilisateurChange && !utilisateur.isActif()) {
@@ -237,6 +240,11 @@ public class SaisieTempsService {
 		}
 		if (tacheChange && !tache.getProjet().isActif()) {
 			throw new BusinessRuleException("Impossible de saisir du temps sur une tâche d'un projet désactivé");
+		}
+		Projet projet = tache.getProjet();
+		if ((utilisateurChange || tacheChange) && !accesProjetService.estMembre(projet.getId(), utilisateur.getId())) {
+			throw new BusinessRuleException("Impossible de saisir du temps sur le projet " + projet.getCode()
+					+ " : l'utilisateur n'en est pas membre (un administrateur doit l'y ajouter)");
 		}
 	}
 

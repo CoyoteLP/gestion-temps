@@ -1,6 +1,7 @@
 # gestion-temps
 
-API REST de gestion du temps de travail (Spring Boot 4, Java 21).
+Gestion du temps de travail : une API REST (Spring Boot 4, Java 21) et son front-end web
+(Next.js, dans [`web/`](web/), voir « Front-end web »).
 
 - Mise en production et mises à jour : [guide de déploiement](docs/DEPLOIEMENT.md)
 - Nouveautés de chaque version : [CHANGELOG](CHANGELOG.md) et
@@ -74,19 +75,28 @@ Le détail des conventions est dans [CLAUDE.md](CLAUDE.md#git).
 |---------|---------------------|------------------------|
 | GET     | /api/projets        | Liste des projets      |
 | GET     | /api/projets/{id}   | Détail d'un projet     |
+| GET     | /api/projets/synthese?mois=AAAA-MM | Synthèse du mois par projet (administrateur) |
 | POST    | /api/projets        | Création (201)         |
 | PUT     | /api/projets/{id}   | Modification           |
 | DELETE  | /api/projets/{id}   | Suppression            |
 
 Les ressources `utilisateurs`, `taches` et `saisies-temps` exposent les mêmes opérations CRUD :
 
-| Ressource                | Filtres (GET liste)                          |
-|--------------------------|----------------------------------------------|
-| /api/utilisateurs        | –                                            |
-| /api/taches              | `projetId`                                   |
-| /api/saisies-temps       | `utilisateurId`, `projetId`, `tacheId`, `du`, `au` (dates, voir ci-dessous) |
-| /api/projets/{projetId}/membres | –                                     |
-| /api/clotures            | `projetId`, `mois` (AAAA-MM)                 |
+| Ressource                | Filtres (GET liste)                          | Tri (`tri`)                  |
+|--------------------------|----------------------------------------------|------------------------------|
+| /api/projets             | `code`, `nom`, `actif`                       | `code`, `nom`, `dateDebut`, `actif` |
+| /api/utilisateurs        | `nom` (nom ou prénom), `email`, `actif` (`false` : comptes à valider) ; administrateur seulement | `nom` (puis prénom), `email`, `creeLe`, `actif` |
+| /api/taches              | `projetId`, `libelle`, `actif`               | `libelle`, `actif`           |
+| /api/saisies-temps       | `utilisateurId`, `projetId`, `tacheId`, `du`, `au` (dates, voir ci-dessous) | – |
+| /api/projets/{projetId}/membres | `nom` (nom ou prénom), `email`, `role` | `nom` (puis prénom), `email`, `role` (responsable, suppléant, contributeur) |
+| /api/clotures            | `projetId`, `mois` (AAAA-MM)                 | –                            |
+
+Filtres texte : éléments qui **contiennent** la saisie, sans tenir compte de la casse ni des accents
+(`%` et `_` sont cherchés tels quels), 100 caractères au plus (150 pour un email). Tri : `tri` parmi
+les colonnes de la liste, `sens=asc` (par défaut) ou `desc` ; une autre valeur renvoie 400 avec les
+valeurs admises. Sans `tri`, l'ordre est celui des identifiants ; avec, l'identifiant départage les
+égalités, et un projet sans date de début vient en dernier. Exemple :
+`GET /api/projets?nom=application&actif=true&tri=nom&sens=desc&page=1`.
 
 Toutes les listes sont **paginées** : paramètres `page` (à partir de 1, 1 par défaut) et `taille`
 (20 par défaut, ramenée à 100 au-delà) ; `data` contient alors la page :
@@ -117,6 +127,28 @@ datée d'aujourd'hui ; en modification (`PUT`), un `jour` absent conserve la dat
 
 Supprimer une ressource encore référencée (projet avec tâches, tâche ou utilisateur avec
 saisies) renvoie 409 : il faut alors la désactiver (`actif: false`).
+
+### Compte de l'utilisateur connecté
+
+Chacun gère sa propre fiche, même sans fiche ou avec une fiche inactive :
+
+| Méthode | URL                   | Description |
+|---------|-----------------------|-------------|
+| GET     | /api/utilisateurs/moi | Sa fiche ; `actif: false` = en attente de validation. 404 s'il n'en a pas encore |
+| POST    | /api/utilisateurs/moi | **Inscription** : crée sa fiche à partir du jeton (email vérifié, `given_name`, `family_name`), sans corps. 201 ; 409 si elle existe déjà ; 422 si l'email n'est pas vérifié ou si le nom manque |
+| PUT     | /api/utilisateurs/moi | Modifie son nom et son prénom (`{ "nom", "prenom", "version" }`) ; l'email et l'état ne se modifient pas ici |
+
+La fiche créée par l'inscription est **inactive** : un administrateur la valide
+(`GET /api/utilisateurs?actif=false`, puis `PUT /api/utilisateurs/{id}` avec `actif: true`).
+
+Chaque fiche porte `rattache` : `true` si elle est rattachée à un compte de connexion (l'identifiant
+du compte n'est pas exposé). Un administrateur peut la détacher par
+`DELETE /api/utilisateurs/{id}/rattachement` (200, sans effet sur une fiche non rattachée), quand le
+compte a été recréé chez le fournisseur (« Inscription à finaliser » alors que la fiche existe) :
+la fiche est reprise à la connexion suivante par le compte qui présente le même email vérifié.
+
+Chaque projet renvoyé porte `monRole` : le rôle de l'appelant dans le projet (`MANAGER`, `BACKUP`,
+`CONTRIBUTEUR`), `null` s'il n'en est pas membre.
 
 ### Modification et accès concurrents
 
@@ -150,13 +182,22 @@ s'applique qu'à une saisie nouvelle ou déplacée (autre jour ou autre tâche).
 ### Clôture mensuelle
 
 Un mois **terminé** peut être clôturé pour un projet (`POST /api/clotures` avec `projetId` et `mois`,
-ex. `"2026-10"`) par un administrateur ou un membre du projet (MANAGER, BACKUP). Un administrateur
+ex. `"2026-10"`) par un administrateur, un responsable ou un suppléant du projet (MANAGER, BACKUP ;
+pas un contributeur). Un administrateur
 peut clôturer d'un coup tous les projets actifs qui ne le sont pas encore
 (`POST /api/clotures/tous-projets` avec `mois`, 201 avec la liste des clôtures créées). Ensuite, les
 saisies de ce mois sur ce projet ne peuvent plus être créées, modifiées, déplacées (vers ou depuis ce
 mois) ni supprimées, administrateur compris (422). Seul un administrateur peut rouvrir le mois
 (`DELETE /api/clotures/{id}`). Le mois en cours ou à venir ne peut pas être clôturé (422), un mois
 déjà clôturé renvoie 409.
+
+La **synthèse d'un mois** (`GET /api/projets/synthese?mois=2026-10`, administrateur seulement)
+renvoie `projets`, une page qui donne pour chaque projet son code, son nom, son statut, le total des
+heures saisies dans le mois (`totalHeures`, 0 sans saisie) et l'identifiant de sa clôture
+(`clotureId`, null si le mois est ouvert), et `totalHeures`, le total général des projets filtrés
+(toutes pages confondues). Elle liste les projets actifs, et les projets inactifs qui ont des saisies
+ou une clôture ce mois-là, triés par code. Filtres : `projet` (texte contenu dans le code ou le nom),
+`cloture` (`true` : mois clôturé, `false` : ouvert). Mois absent ou invalide : 400.
 
 ## Authentification et droits
 
@@ -169,17 +210,32 @@ Sans jeton valide (signature, émetteur, audience, expiration) : 401.
 - **Rôle administrateur** : la revendication des rôles du jeton (`roles` par défaut, configurable
   par `OIDC_ROLES_CLAIM`, ex. `realm_access.roles` pour Keycloak) contient `ADMIN`. L'administrateur
   gère les projets, tâches, utilisateurs et membres, et accède à toutes les saisies.
-- **Collaborateur** : tout autre utilisateur authentifié. Il lit les projets, tâches, utilisateurs
-  et membres ; il crée, modifie et supprime **ses** saisies, et consulte en plus celles des projets
-  dont il est membre (filtre `projetId` ou `tacheId`). Toute autre écriture : 403.
+- **Collaborateur** : tout autre utilisateur authentifié, dont la fiche est **active**. Il ne lit
+  que les projets **dont il est membre**, avec leurs tâches, membres et clôtures (listes
+  restreintes ; 403 « Vous n'êtes pas membre de ce projet » sur un autre projet), et sa propre fiche
+  (`/api/utilisateurs/moi`). Il crée, modifie et supprime **ses** saisies, sur les projets dont il
+  est membre, et consulte en plus celles des projets dont il est responsable ou suppléant (filtre
+  `projetId` ou `tacheId`). La liste et le détail des utilisateurs, et toute autre écriture : 403.
+- **Compte sans fiche active** (inconnu, inscrit en attente de validation, désactivé) : il n'accède
+  qu'à sa propre fiche (`/api/utilisateurs/moi`) ; tout le reste renvoie 403, avec un message qui
+  en donne la raison. Un administrateur n'a pas besoin de fiche.
 - **Membres d'un projet** (`/api/projets/{projetId}/membres`) : un utilisateur avec un rôle de
-  projet `MANAGER` ou `BACKUP` (mêmes droits aujourd'hui).
+  projet. `MANAGER` (responsable) et `BACKUP` (suppléant) consultent les saisies de tous les
+  membres et clôturent les mois du projet ; `CONTRIBUTEUR` voit le projet et y saisit son temps.
+  Seul un membre (tout rôle) peut saisir du temps sur le projet, y compris quand l'administrateur
+  saisit pour lui (sinon 422) ; une saisie existante reste corrigeable après son retrait. Chaque
+  membre est renvoyé avec le `nom` et le `prenom` de l'utilisateur (pas son email) : les membres du
+  projet les lisent sans avoir accès aux fiches des utilisateurs.
 - **Rattachement du compte** : l'administrateur crée l'utilisateur avec son email ; à la première
   connexion, l'API le retrouve par l'email du jeton puis mémorise l'identifiant du compte (`sub`).
   L'email doit être déclaré vérifié par le fournisseur (`email_verified: true`) ; pour un
   fournisseur qui ne transmet pas cette revendication mais garantit les emails (annuaire de
   l'entreprise), `OIDC_EXIGER_EMAIL_VERIFIE=false` accepte son absence.
-  Un compte sans utilisateur correspondant, ou un utilisateur désactivé, reçoit 403 sur les saisies.
+  Sans fiche, un utilisateur peut aussi s'inscrire lui-même (`POST /api/utilisateurs/moi`, voir
+  « Compte de l'utilisateur connecté ») : sa fiche est alors rattachée à son compte dès sa création.
+  Une fiche rattachée n'est jamais reprise par un autre compte, même de même email ; si le compte
+  est recréé chez le fournisseur, l'administrateur réinitialise le rattachement
+  (`DELETE /api/utilisateurs/{id}/rattachement`, ou l'écran Utilisateurs du front).
 
 ### Keycloak de développement
 
@@ -200,6 +256,12 @@ Dans `.env` : `OIDC_ISSUER_URI=http://localhost:8180/realms/gestion-temps` et
 | `jdupont` | `jdupont@lirox.test` | collaborateur                             |
 | `pmartin` | `pmartin@lirox.test` | collaborateur (à ajouter comme membre d'un projet) |
 
+Ces comptes ont un identifiant fixe dans le royaume (`id`, repris dans la revendication `sub`) : une
+fiche rattachée à l'un d'eux le reste après la recréation du conteneur Keycloak. Un compte créé par
+inscription reçoit un nouvel identifiant à chaque réimport ; sa fiche, déjà rattachée à l'ancien,
+n'est alors plus retrouvée (« Inscription à finaliser ») : réinitialiser son rattachement en
+administrateur (écran Utilisateurs, ou `DELETE /api/utilisateurs/{id}/rattachement`).
+
 L'administrateur n'a pas besoin d'exister dans l'API ; les collaborateurs doivent y être créés avec
 le même email pour que leur compte soit rattaché :
 
@@ -211,10 +273,125 @@ JDUPONT=$(./docker/keycloak/jeton.sh jdupont)
 curl -H "Authorization: Bearer $JDUPONT" http://localhost:8080/api/saisies-temps
 ```
 
+**Inscription en dev** : la page de connexion de Keycloak propose « S'inscrire » (le front l'ouvre
+directement : voir [Front-end web](#front-end-web)). Le Keycloak de
+dev n'a pas de serveur d'emails : après l'inscription, cocher *Email verified* sur le compte dans la
+console (*Users*), puis créer la fiche avec le jeton de l'inscrit (`POST /api/utilisateurs/moi`) et
+la valider en administrateur (`PUT /api/utilisateurs/{id}` avec `actif: true`, ou écran
+« Utilisateurs » du front).
+
 Les jetons durent 30 minutes. Console d'administration : http://localhost:8180/admin (`admin`,
 mot de passe `KEYCLOAK_ADMIN_PASSWORD`, `admin` par défaut). Sous Git Bash (Windows), éviter les
 accents dans les corps JSON passés en argument à `curl` (ils ne sont pas envoyés en UTF-8) :
 utiliser un fichier (`--data-binary @corps.json`).
+
+## Front-end web
+
+Application Next.js dans `web/` (conventions : [web/CLAUDE.md](web/CLAUDE.md)). Le navigateur ne
+parle qu'au serveur Next.js, qui appelle l'API avec le jeton de l'utilisateur (BFF) : les jetons
+restent dans un cookie chiffré `httpOnly`, et l'API n'a pas de CORS à ouvrir.
+
+Prérequis : Node.js 22, le Keycloak de développement et l'API lancés (voir plus haut). Le royaume
+déclare le client public `gestion-temps-web` (Authorization Code + PKCE) ; après une mise à jour de
+`realm-gestion-temps.json`, le réimporter avec
+`docker compose -f docker/keycloak/compose.yaml down` puis `up -d`.
+
+```bash
+cd web
+cp .env.example .env.local      # puis renseigner SESSION_SECRET (voir ci-dessous)
+npm install
+npm run dev                     # http://localhost:3000
+```
+
+`SESSION_SECRET` chiffre le cookie de session : une valeur aléatoire propre à chaque poste, générée par
+`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Sous PowerShell, si
+`npm` est refusé (« l'exécution de scripts est désactivée »), autoriser les scripts locaux une fois :
+`Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`.
+
+Sans session, toute page renvoie vers `/connexion` ; un compte de test (`jdupont` / `jdupont`)
+doit exister dans l'API pour que la liste des projets s'affiche.
+
+**Inscription depuis le front** : « Créer un compte » sur `/connexion` ouvre le formulaire
+d'inscription de Keycloak. À chaque connexion d'un non-administrateur, le serveur Next.js crée sa
+fiche (`POST /api/utilisateurs/moi`, inactive) si elle n'existe pas ; un échec ne bloque pas la
+connexion. Tant que la fiche n'est pas active, les pages Projets et Saisies affichent à la place
+« Inscription à finaliser » (pas de fiche : bouton pour réessayer, qui affiche la raison du refus)
+ou « Compte en attente de validation ». En dev :
+
+1. « Créer un compte », remplir le formulaire : retour connecté, « Inscription à finaliser »
+   (l'email n'est pas vérifié, faute de serveur d'emails) ;
+2. dans la console Keycloak (*Users*), cocher *Email verified*, puis « Finaliser mon inscription » :
+   « Compte en attente de validation » ;
+3. en administrateur (`admin` / `admin`), page « Utilisateurs » : le compte figure sous « En
+   attente », bouton « Activer » ; côté inscrit, recharger la page.
+
+**Projets et tâches** : un collaborateur consulte les projets dont il est membre (liste, fiche et
+tâches) ; l'administrateur les voit tous. L'administrateur crée, modifie et supprime projets et tâches (une ressource encore
+utilisée ne se supprime pas : le message de l'API invite à la désactiver), et gère les membres d'un
+projet (section « Membres » de la fiche, invisible des autres utilisateurs ; rôles Responsable,
+Suppléant et Contributeur, ce dernier proposé par défaut). La liste et la fiche d'un projet
+indiquent le rôle de l'utilisateur connecté (« Mon rôle »). La page « Utilisateurs », réservée à
+l'administrateur, liste les comptes (en attente par défaut), les active ou les désactive, et
+réinitialise le rattachement d'une fiche à son compte de connexion (icône de lien rompu, avec
+confirmation) quand ce compte a été recréé.
+
+**Saisies** (`/saisies`) : la semaine de l'utilisateur connecté (`?semaine=` = date du lundi ;
+navigation semaine par semaine ou choix d'une date). Une grille en lecture cumule les heures par
+tâche et par jour (totaux du jour et de la semaine) ; la liste des saisies de la semaine permet de
+les modifier ou de les supprimer, sauf dans un mois clôturé (lecture seule). Une saisie se crée dans
+un dialogue (projet dont on est membre, tâche, jour, durée par pas de 0,5 h, commentaire), qui
+rappelle le temps déjà saisi ce jour. Au-delà de 8 h dans une journée, la grille et le dialogue
+affichent un avertissement, sans bloquer (l'API ne refuse qu'à 24 h). Deux recopies : « Préremplir depuis la semaine précédente »
+(semaine vide seulement) et « Recopier le lundi sur la semaine » (jours vides du mardi au
+vendredi) ; les saisies refusées par l'API sont listées sans empêcher les autres. Un administrateur
+sans fiche ne saisit pas de temps.
+
+**Équipe** (`/equipe?projet=…&mois=AAAA-MM`) : pour un projet dont l'utilisateur est responsable ou
+suppléant (tous pour l'administrateur) et un mois (le mois en cours par défaut), le récapitulatif
+des saisies (total par membre, membres sans saisie compris, total par tâche et du projet) puis leur
+détail, paginé et filtrable par membre et par tâche, en lecture seule. Le statut du mois y est affiché, avec
+« Clôturer ce mois » (mois terminé) ou « Rouvrir » (administrateur). Un contributeur y lit que la
+vue est réservée aux responsables et suppléants. L'administrateur voit en tête la **synthèse du
+mois** de tous les projets (statut ouvert ou clôturé, total d'heures ; filtres par projet et par
+statut ; ligne « Total général » des projets filtrés), avec un cadenas par projet
+pour clôturer (mois terminé) ou rouvrir, et « Clôturer tous les projets ouverts » (projets actifs
+que leurs responsables n'ont pas clôturés).
+
+**Clôtures** : la fiche d'un projet liste ses mois clôturés ; « Clôturer un mois » (administrateur,
+responsable, suppléant ; mois terminé, le précédent par défaut) et « Rouvrir » (administrateur).
+
+La page Profil modifie le nom et le prénom de la fiche ; le mot de passe et l'email se gèrent dans
+la console de compte de Keycloak (lien « Gérer mon compte de connexion »).
+
+Vérifications :
+`npm run lint`, `npm run format:check`, `npm run typecheck`, `npm test`, `npm run build` (lancées
+par le workflow « Front web » sur chaque pull request qui modifie `web/`). Sous Windows, lancer
+Vitest depuis un chemin en `C:\…` (majuscule), sinon aucun test n'est trouvé.
+
+**Tests de bout en bout** (Playwright, `web/e2e/`) : connexion et droits, saisie de la semaine,
+équipe et clôture, sans erreur CSP ni JavaScript, contre la pile complète de `docker/e2e` (MariaDB,
+Keycloak, API en profil `prod`, image du front), sur des ports distincts de ceux de dev (front
+3100, Keycloak 8280, API 8090) :
+
+```bash
+./mvnw package -DskipTests                                      # jar de l'API
+docker compose -f docker/e2e/compose.yaml up -d --build --wait  # pile de test
+cd web
+npx playwright install chromium                                 # première fois
+npm run e2e
+docker compose -f ../docker/e2e/compose.yaml down -v            # arrêter, tout effacer
+```
+
+Les tests préparent leurs données par l'API et peuvent être relancés sans réinitialiser la pile.
+Le workflow « Tests E2E » les lance sur les pull requests qui modifient `web/` ou l'API (non
+obligatoire pour fusionner ; rapport en artefact en cas d'échec).
+
+Image conteneur du front : `docker build -t gestion-temps-web web` (`web/Dockerfile`) ; variables,
+sondes de santé (`/api/sante`, `/api/sante/disponibilite`) et mise en production dans le
+[guide de déploiement](docs/DEPLOIEMENT.md).
+
+Les types de l'API (`web/src/lib/api/schema.d.ts`) sont générés depuis l'API de dev en marche :
+`npm run api:types`.
 
 ## Format des réponses
 
@@ -228,7 +405,9 @@ Toutes les réponses (succès comme erreurs) utilisent la même enveloppe, le co
 { "status": "error", "data": null, "message": "Projet introuvable (id=9999)" }
 ```
 
-Chaque ressource renvoyée porte un objet `audit` en lecture seule : date et auteur de la création
+Chaque ressource renvoyée porte un objet `audit` en lecture seule, renvoyé aux **seuls
+administrateurs** (`null` pour les autres, qui n'ont pas à connaître l'email des auteurs) : date et
+auteur de la création
 et de la dernière modification (instants UTC ; auteur = email du jeton, ou identifiant du compte
 à défaut, null pour les données antérieures à l'audit).
 
@@ -262,10 +441,13 @@ En bref :
   requête dans le champ `correlationId` ; en dev, lisibles, avec les requêtes SQL d'Hibernate
   (niveau `debug` de `org.hibernate.SQL`).
 - **Analyses de sécurité** : Dependabot propose chaque semaine les mises à jour des dépendances
-  Maven et des actions GitHub (pull requests vers `develop`) ; CodeQL analyse le code à chaque
+  Maven, npm (`web/`) et des actions GitHub (pull requests vers `develop`) ; CodeQL analyse le
+  code Java et TypeScript à chaque
   pull request et chaque semaine (onglet *Security* du dépôt).
 
 ## Structure
+
+API (`src/main/java`) :
 
 ```
 com.lirox.gestiontemps
@@ -277,3 +459,7 @@ com.lirox.gestiontemps
 ├── dto          objets d'entrée/sortie
 └── exception    exceptions + handler global
 ```
+
+Front-end (`web/src`) : `app/` (pages), `components/` (dont `ui/`, composants shadcn/ui),
+`lib/api/` (client de l'API), `lib/auth/` (connexion OIDC, session et jetons), `proxy.ts`
+(authentification et protection des pages).

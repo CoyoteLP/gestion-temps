@@ -3,6 +3,7 @@ package com.lirox.gestiontemps.controller;
 import static com.lirox.gestiontemps.JetonsDeTest.collaborateur;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -146,7 +147,7 @@ class ClotureControllerTest {
 
 	@ParameterizedTest
 	@ValueSource(strings = { "MANAGER", "BACKUP" })
-	void unMembreDuProjetPeutLeCloturer(RoleProjet role) throws Exception {
+	void unResponsableDuProjetPeutLeCloturer(RoleProjet role) throws Exception {
 		Utilisateur membre = saveUtilisateur("pmartin@lirox.com");
 		saveMembre(projet, membre, role);
 		mockMvc.perform(post("/api/clotures").with(collaborateur(membre)).contentType(MediaType.APPLICATION_JSON)
@@ -154,7 +155,10 @@ class ClotureControllerTest {
 						{"projetId": %d, "mois": "2026-05"}
 						""".formatted(projet.getId())))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.data.audit.creePar").value(membre.getSujet()));
+				// L'audit n'est renvoyé qu'aux administrateurs ; il est bien enregistré
+				.andExpect(jsonPath("$.data.audit").value(nullValue()));
+		assertThat(clotureRepository.findAll()).singleElement()
+				.satisfies(cloture -> assertThat(cloture.getCreePar()).isEqualTo(membre.getSujet()));
 	}
 
 	@Test
@@ -167,7 +171,19 @@ class ClotureControllerTest {
 						""".formatted(projet.getId())))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.message")
-						.value("Seuls un administrateur ou un responsable du projet peuvent le clôturer"));
+						.value("Seuls un administrateur, un responsable ou un suppléant du projet peuvent le clôturer"));
+		assertThat(clotureRepository.count()).isZero();
+	}
+
+	@Test
+	void unContributeurNePeutPasCloturerSonProjet() throws Exception {
+		Utilisateur contributeur = saveUtilisateur("jdupont@lirox.com");
+		saveMembre(projet, contributeur, RoleProjet.CONTRIBUTEUR);
+		mockMvc.perform(post("/api/clotures").with(collaborateur(contributeur)).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"projetId": %d, "mois": "2026-05"}
+						""".formatted(projet.getId())))
+				.andExpect(status().isForbidden());
 		assertThat(clotureRepository.count()).isZero();
 	}
 
@@ -227,11 +243,25 @@ class ClotureControllerTest {
 	}
 
 	@Test
-	void unCollaborateurPeutConsulterLesClotures() throws Exception {
-		saveCloture(projet, MOIS_TERMINE);
-		mockMvc.perform(get("/api/clotures").with(collaborateur(saveUtilisateur("jdupont@lirox.com"))))
+	void unCollaborateurNeVoitQueLesCloturesDesProjetsDontIlEstMembre() throws Exception {
+		Cloture sienne = saveCloture(projet, MOIS_TERMINE);
+		Projet autreProjet = saveProjet("PRJ-02", true);
+		Cloture autre = saveCloture(autreProjet, MOIS_TERMINE);
+		Utilisateur contributeur = saveUtilisateur("jdupont@lirox.com");
+		saveMembre(projet, contributeur, RoleProjet.CONTRIBUTEUR);
+
+		mockMvc.perform(get("/api/clotures").with(collaborateur(contributeur)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.contenu.length()").value(1));
+				.andExpect(jsonPath("$.data.contenu.length()").value(1))
+				.andExpect(jsonPath("$.data.contenu[0].id").value(sienne.getId()));
+		mockMvc.perform(get("/api/clotures/{id}", sienne.getId()).with(collaborateur(contributeur)))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/clotures").param("projetId", autreProjet.getId().toString())
+				.with(collaborateur(contributeur)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message").value("Vous n'êtes pas membre de ce projet"));
+		mockMvc.perform(get("/api/clotures/{id}", autre.getId()).with(collaborateur(contributeur)))
+				.andExpect(status().isForbidden());
 	}
 
 	@Test
