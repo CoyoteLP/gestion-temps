@@ -1,0 +1,103 @@
+# Pile des tests de bout en bout (web/e2e, Playwright) : base, Keycloak, API et front, avec la
+# configuration de production, sur des ports distincts de ceux de dev. Jamais en production.
+#
+#   ./mvnw package -DskipTests                                         # jar de l'API (target/)
+#   docker compose -f docker/e2e/compose.yaml up -d --build --wait     # démarrer, attendre les sondes
+#   (cd web && npm run e2e)                                            # lancer les tests
+#   docker compose -f docker/e2e/compose.yaml down -v                  # arrêter et tout effacer
+#
+# Keycloak est nommé `keycloak:8280` pour les conteneurs comme pour le navigateur de test (Chromium
+# y résout `keycloak` en 127.0.0.1, voir web/playwright.config.ts) : l'émetteur des jetons est le
+# même pour le front, l'API et le navigateur.
+name: gestion-temps-e2e
+
+services:
+  mariadb:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: ${E2E_DB_ROOT_PASSWORD:-e2e-root}
+      MARIADB_DATABASE: gestion_temps
+      MARIADB_USER: gestion_temps
+      MARIADB_PASSWORD: ${E2E_DB_PASSWORD:-e2e-mot-de-passe}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6.4
+    command: start-dev --import-realm --http-port=8280
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${E2E_KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Émetteur fixe, quelle que soit l'adresse d'appel (navigateur, conteneurs, préparation des
+      # données depuis le poste par localhost:8280)
+      KC_HOSTNAME: http://keycloak:8280
+    ports:
+      - "8280:8280"
+    volumes:
+      - ../keycloak/realm-gestion-temps.json:/opt/keycloak/data/import/realm-gestion-temps.json:ro
+    healthcheck:
+      # Ni curl ni wget dans l'image : requête HTTP écrite à la main avec bash
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/localhost/8280 &&
+          printf 'GET /realms/gestion-temps/.well-known/openid-configuration HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 &&
+          grep -q '200 OK' <&3
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  api:
+    image: eclipse-temurin:21-jre
+    # Jar construit par ./mvnw package (le .jar.original de Maven est écarté)
+    command:
+      - sh
+      - -c
+      - exec java -jar "$(ls /app/gestion-temps-*.jar | grep -v original | head -n 1)"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:mariadb://mariadb:3306/gestion_temps
+      DB_USERNAME: gestion_temps
+      DB_PASSWORD: ${E2E_DB_PASSWORD:-e2e-mot-de-passe}
+      OIDC_ISSUER_URI: http://keycloak:8280/realms/gestion-temps
+      OIDC_AUDIENCE: gestion-temps-api
+    ports:
+      # Publié pour la préparation des données des tests seulement
+      - "8090:8080"
+    volumes:
+      - ../../target:/app:ro
+    depends_on:
+      mariadb: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8081/actuator/health/readiness"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  front:
+    build: ../../web
+    environment:
+      # Valeurs de la pile de test uniquement (surchargeables par l'environnement)
+      SESSION_SECRET: ${E2E_SESSION_SECRET:-secret-de-la-pile-de-tests-e2e-jamais-ailleurs}
+      OIDC_ISSUER_URI: http://keycloak:8280/realms/gestion-temps
+      OIDC_CLIENT_ID: gestion-temps-web
+      API_URL: http://api:8080
+      APP_URL: http://localhost:3100
+    ports:
+      - "3100:3000"
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      # Image distroless, sans shell : la sonde de disponibilité interrogée par Node
+      test:
+        - CMD
+        - /nodejs/bin/node
+        - -e
+        - "fetch('http://localhost:3000/api/sante/disponibilite').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 30

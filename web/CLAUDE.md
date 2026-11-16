@@ -204,4 +204,9 @@ src/
 - Composant serveur `async` : `render(await Composant(props))` (voir `TachesProjet`) ; `notFound()`
   se vérifie par l'erreur `NEXT_HTTP_ERROR_FALLBACK;404`. `src/test/setup.ts` fournit les API du
   navigateur absentes de jsdom (`ResizeObserver`, `matchMedia`).
-- Les tests E2E (Playwright) arriveront avec les écrans métier.
+- **Tests de bout en bout** (Playwright, `e2e/`) contre la pile complète de `docker/e2e` (voir le
+  README) : données préparées par l'API (`preparation.setup.ts`), une connexion par compte
+  réutilisée (`connexion.setup.ts`), parcours dans `*.spec.ts`. Importer `test` et `expect` de
+  `./outils` : chaque test échoue s'il provoque une violation de la CSP ou une erreur JavaScript.
+  Un nouvel écran ou parcours important y gagne un test ; les tests partagent des données et
+  s'exécutent l'un après l'autre.

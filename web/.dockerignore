@@ -16,5 +16,9 @@ AGENTS.md
 Dockerfile
 .dockerignore
 **/*.test.ts
+e2e
+playwright.config.ts
+playwright-report
+test-results
 **/*.test.tsx
 src/test

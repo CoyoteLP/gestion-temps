@@ -1,9 +1,8 @@
 # Plan : lot F5 — préparer le front à la production
 
-> **État (2026-11-16)** : plan validé. **F5a** (PR #34) et **F5b** (PR #35) fusionnés. **F5c**
-> validé et implémenté sur `feature/f5c-deploiement-front` (non commité) : image construite et
-> lancée en local (sondes, redirection, en-têtes, utilisateur `nonroot`, 75 Mo d'application sur
-> 204 Mo d'image de base).
+> **État (2026-11-16)** : plan validé. **F5a** (PR #34), **F5b** (PR #35) et **F5c** (PR #36)
+> fusionnés. **F5d** validé et implémenté sur `feature/f5d-tests-e2e` (non commité) : 12 tests
+> Playwright verts sur la pile complète.
 
 Décisions de l'utilisateur (2026-11-16) :
 - **quatre PR** : F5a authentification, F5b en-têtes de sécurité, F5c image et guide de déploiement,
@@ -192,9 +191,66 @@ disponibilité** ; image **construite par la CI** (sans publication).
   Dockerfile quand il contiendra des fichiers) ; la CI n'a plus besoin de variables factices ni de
   secret pour le build ; elle démarre l'image et interroge `/api/sante`.
 
-## F5d — Tests E2E Playwright (à détailler à son tour)
-Pile complète par docker compose de test, parcours clés (connexion, saisie, clôture, droits),
-workflow CI dédié, non bloquant au départ.
+## F5d — Tests E2E Playwright
+
+Décisions de l'utilisateur (2026-11-16) : parcours **connexion et droits**, **saisie de la
+semaine**, **équipe et clôture**, **aucune erreur CSP** ; CI sur les **pull requests qui touchent
+`web/` ou l'API**, non bloquante au départ.
+
+### Pile de test (`docker/e2e/compose.yaml`)
+Les images et la configuration de production, sur des ports distincts de ceux de dev (la pile de
+dev peut rester lancée) :
+
+| Service | Image | Port publié |
+|---------|-------|-------------|
+| MariaDB 11.4 | `mariadb:11.4` | aucun |
+| Keycloak 26.6.4, royaume de dev importé | `quay.io/keycloak/keycloak` | 8280 |
+| API, profil `prod` | `eclipse-temurin:21-jre`, jar construit par `./mvnw package` | 8090 (préparation des données) |
+| Front | image de `web/Dockerfile` | 3100 |
+
+- **Même adresse de Keycloak partout** : `http://keycloak:8280` pour les conteneurs comme pour le
+  navigateur de test (Chromium lancé avec `--host-resolver-rules=MAP keycloak 127.0.0.1`) ; sans
+  cela, l'émetteur des jetons ne correspondrait pas à celui qu'attend l'API.
+- Royaume de dev : ajout des adresses de retour du front de test (`http://localhost:3100/…`),
+  sans effet sur le dev.
+- Sondes de santé de chaque service : `docker compose up --wait` rend la main quand tout est prêt.
+- Secret de session propre à la pile de test (valeur de test, jamais utilisée ailleurs).
+
+### Tests (`web/e2e/`, Playwright 1.64.1, Chromium)
+- **Préparation** (une fois par exécution, via l'API avec un jeton administrateur du client de
+  test `gestion-temps-dev`) : fiches de `jdupont` et `pmartin`, un projet propre à l'exécution
+  (code unique : relançable sans réinitialiser la pile), une tâche, `jdupont` responsable,
+  `pmartin` contributeur, des saisies de `pmartin` le mois précédent.
+- **Connexion** : une fois par compte (formulaire Keycloak), session réutilisée par les tests.
+- **Connexion et droits** : page demandée sans session → connexion → retour sur la page ;
+  déconnexion ; contributeur : « Utilisateurs » introuvable, pas de bouton de clôture ;
+  administrateur : menu « Utilisateurs ».
+- **Saisie de la semaine** (`pmartin`) : créer, modifier, supprimer une saisie ; avertissement
+  au-delà de 8 h, erreur au-delà de 24 h.
+- **Équipe et clôture** : `jdupont` voit le récapitulatif du mois précédent (total de `pmartin`) et
+  clôture le mois ; `pmartin` voit ses saisies de ce mois en lecture seule ; l'administrateur rouvre
+  depuis la synthèse.
+- **Aucune erreur CSP** : sur chaque page de chaque test, aucune violation de la politique de
+  sécurité du contenu ni erreur JavaScript dans la console (vérifié automatiquement à la fin de
+  chaque test).
+- Tests exécutés l'un après l'autre (ils partagent des données) ; trace et capture en cas d'échec.
+
+### Exécution
+- Local : `./mvnw package -DskipTests`, `docker compose -f docker/e2e/compose.yaml up -d --build
+  --wait`, puis `npm run e2e` dans `web/` (et `npx playwright install chromium` la première fois).
+- CI : workflow « Tests E2E » sur les pull requests vers `develop` et `main` qui modifient `web/`
+  ou `src/` ; rapport Playwright publié en artefact en cas d'échec ; pas dans les vérifications
+  obligatoires de la branche au départ.
+- README : section « Tests de bout en bout ».
+
+### Réalisé
+- Keycloak de test : `KC_HOSTNAME=http://keycloak:8280` (émetteur fixe, y compris pour le jeton de
+  préparation demandé depuis le poste).
+- **Défaut trouvé par les tests** : `zod` testait `new Function` au premier usage d'un formulaire,
+  ce que la CSP signale comme une violation (page Saisies). Corrigé par `z.config({ jitless: true })`
+  dans `src/instrumentation-client.ts`, exécuté par Next.js avant le code de l'application.
+- La préparation efface les saisies de `pmartin` et rouvre les clôtures du mois précédent laissées
+  par une exécution interrompue : la pile se relance sans réinitialisation.
 
 ## Points validés (2026-11-16)
 1. Cookie **réparti** sur plusieurs cookies (`iron-session`, option `chunk`).

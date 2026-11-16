@@ -56,16 +56,19 @@
 		{
 			"clientId": "gestion-temps-web",
 			"name": "gestion-temps (front-end web)",
-			"description": "Client public du front-end Next.js (web/) : Authorization Code + PKCE",
+			"description": "Client public du front-end Next.js (web/) : Authorization Code + PKCE ; port 3000 en dev, 3100 pour la pile de tests E2E (docker/e2e)",
 			"enabled": true,
 			"publicClient": true,
 			"standardFlowEnabled": true,
 			"directAccessGrantsEnabled": false,
-			"redirectUris": ["http://localhost:3000/api/auth/callback/keycloak"],
-			"webOrigins": ["http://localhost:3000"],
+			"redirectUris": [
+				"http://localhost:3000/api/auth/callback/keycloak",
+				"http://localhost:3100/api/auth/callback/keycloak"
+			],
+			"webOrigins": ["http://localhost:3000", "http://localhost:3100"],
 			"attributes": {
 				"pkce.code.challenge.method": "S256",
-				"post.logout.redirect.uris": "http://localhost:3000/connexion"
+				"post.logout.redirect.uris": "http://localhost:3000/connexion##http://localhost:3100/connexion"
 			},
 			"protocolMappers": [
 				{
